@@ -38,10 +38,11 @@ pub fn build_response(report_id: u8, config: &DeviceConfig) -> Option<Vec<u8>> {
         0x85 => Some(build_mac(config)),
         0x86 => Some(build_firmware_encoder_ap2(config)),
         0x8a => Some(build_firmware_encoder_ld(config)),
-        // 0x8f — Unknown firmware component, official Elgato software only.
-        // Likely another firmware version or capabilities report.
-        // Return same structure as 0x83 with our firmware version.
-        0x8f => Some(build_firmware_generic(0x8f, config)),
+        // 0x87, 0x88, 0x89, 0x8b..0x8e, 0x8f: Unknown firmware-component version reports.
+        // Official Elgato software queries these; respond with same structure as 0x83.
+        0x87 | 0x88 | 0x89 | 0x8b | 0x8c | 0x8d | 0x8e | 0x8f => {
+            Some(build_firmware_generic(report_id, config))
+        }
         _ => None,
     }
 }
