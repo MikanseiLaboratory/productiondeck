@@ -38,6 +38,10 @@ pub fn build_response(report_id: u8, config: &DeviceConfig) -> Option<Vec<u8>> {
         0x85 => Some(build_mac(config)),
         0x86 => Some(build_firmware_encoder_ap2(config)),
         0x8a => Some(build_firmware_encoder_ld(config)),
+        // 0x8f — Unknown firmware component, official Elgato software only.
+        // Likely another firmware version or capabilities report.
+        // Return same structure as 0x83 with our firmware version.
+        0x8f => Some(build_firmware_generic(0x8f, config)),
         _ => None,
     }
 }
@@ -62,13 +66,7 @@ fn build_device_info() -> Vec<u8> {
 ///   offset 0-1:  [0x03, 0x83]
 ///   offset 8-15: ASCII firmware version, up to 8 chars
 fn build_firmware_ap2(config: &DeviceConfig) -> Vec<u8> {
-    let mut buf = vec![0u8; 64];
-    buf[0] = 0x03;
-    buf[1] = 0x83;
-    let ver = config.firmware_version.as_bytes();
-    let len = ver.len().min(8);
-    buf[8..8 + len].copy_from_slice(&ver[..len]);
-    buf
+    build_firmware_generic(0x83, config)
 }
 
 /// 0x84 — Serial Number
@@ -100,22 +98,20 @@ fn build_mac(config: &DeviceConfig) -> Vec<u8> {
 }
 
 /// 0x86 — Encoder firmware AP2
-/// (used by getAllFirmwareVersions, offset 2 onwards as the relevant data)
 fn build_firmware_encoder_ap2(config: &DeviceConfig) -> Vec<u8> {
-    let mut buf = vec![0u8; 64];
-    buf[0] = 0x03;
-    buf[1] = 0x86;
-    let ver = config.firmware_version.as_bytes();
-    let len = ver.len().min(8);
-    buf[8..8 + len].copy_from_slice(&ver[..len]);
-    buf
+    build_firmware_generic(0x86, config)
 }
 
 /// 0x8a — Encoder firmware LD
 fn build_firmware_encoder_ld(config: &DeviceConfig) -> Vec<u8> {
+    build_firmware_generic(0x8a, config)
+}
+
+/// Generic firmware report builder: [0x03, id, 0x00*6, version(8 bytes), 0x00...]
+fn build_firmware_generic(report_id: u8, config: &DeviceConfig) -> Vec<u8> {
     let mut buf = vec![0u8; 64];
     buf[0] = 0x03;
-    buf[1] = 0x8a;
+    buf[1] = report_id;
     let ver = config.firmware_version.as_bytes();
     let len = ver.len().min(8);
     buf[8..8 + len].copy_from_slice(&ver[..len]);
