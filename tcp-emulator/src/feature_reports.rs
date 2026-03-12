@@ -128,13 +128,15 @@ fn build_firmware_generic(report_id: u8, config: &DeviceConfig) -> Vec<u8> {
 }
 
 /// 0x1a — Device ready / operational status.
-/// Exact layout unknown; we encode the device geometry as best-guess.
+/// The official software polls this every ~2 seconds after "Wake up" until
+/// byte[2] becomes non-zero (device ready). While byte[2]==0 the device
+/// stays in "waking up" state and is not shown in the UI.
 /// Stream Deck Studio: 32 buttons (4 rows x 8 cols), 2 encoders.
 fn build_device_status() -> Vec<u8> {
     let mut buf = vec![0u8; 64];
     buf[0] = 0x03;
     buf[1] = 0x1a;
-    buf[2] = 0x00;                         // status = OK / ready
+    buf[2] = 0x01;                         // status = ready (non-zero)
     buf[3] = BUTTON_COUNT as u8;           // 32 buttons
     buf[4] = 4;                            // 4 rows
     buf[5] = 8;                            // 8 cols
