@@ -1,0 +1,23 @@
+[package]
+name = "productiondeck-tcp-emulator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Stream Deck Studio TCP emulator (Cora protocol)"
+
+[[bin]]
+name = "productiondeck-tcp-emulator"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+mdns-sd = "0.13"
+futures-util = { version = "0.3", features = ["sink"] }
+hostname = "0.4"
+anyhow = "1"
