@@ -23,7 +23,7 @@ impl Default for DeviceConfig {
         Self {
             serial: "EMULATOR001".to_string(),
             mac: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
-            firmware_version: "1.00.000".to_string(),
+            firmware_version: "6.06.001".to_string(),
         }
     }
 }

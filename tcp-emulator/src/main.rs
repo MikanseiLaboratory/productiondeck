@@ -26,13 +26,19 @@ struct Cli {
     #[arg(long, default_value_t = DEFAULT_TCP_PORT)]
     port: u16,
 
-    /// Device serial number
+    /// Device serial number (feature report 0x84)
     #[arg(long, default_value = "EMULATOR001")]
     serial: String,
 
-    /// MAC address (hex, colon-separated, e.g. 00:11:22:33:44:55)
+    /// MAC address (hex, colon-separated, e.g. 00:11:22:33:44:55) (feature report 0x85)
     #[arg(long, default_value = "00:11:22:33:44:55")]
     mac: String,
+
+    /// Firmware version string reported to the host (feature report 0x83, 8 chars max)
+    /// Use a version close to real Studio firmware, e.g. "6.06.001", to avoid
+    /// "Device firmware is not supported" errors from the official software.
+    #[arg(long, default_value = "6.06.001")]
+    firmware: String,
 
     /// Disable mDNS advertisement
     #[arg(long)]
@@ -70,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Arc::new(DeviceConfig {
         serial: cli.serial.clone(),
         mac,
-        firmware_version: "1.00.000".to_string(),
+        firmware_version: cli.firmware.clone(),
     });
 
     // Start mDNS advertisement
@@ -103,6 +109,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Interactive CLI loop (stdin)
     println!("Stream Deck Studio Emulator started on port {}", cli.port);
+    println!("  serial:   {}", cli.serial);
+    println!("  firmware: {}", cli.firmware);
+    println!("  mac:      {}", cli.mac);
     println!("Commands:");
     println!("  press <key>      - press button (0-31)");
     println!("  release <key>    - release button (0-31)");
