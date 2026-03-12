@@ -154,11 +154,10 @@ impl Session {
                 self.handle_send_report(&msg, peer);
             }
             HidOp::Write => {
-                info!(
-                    "  → WRITE flags={:#06x} len={}",
-                    msg.flags.0,
-                    msg.payload.len()
-                );
+                // The official Elgato software requests feature reports via WRITE (hid_op=0x00)
+                // with payload [0x03, reportId, 0x00...] — NOT via GET_REPORT (0x02).
+                // Respond with a WRITE carrying the report data.
+                self.handle_write_request(framed, msg, peer).await?;
             }
         }
         Ok(())
@@ -211,6 +210,55 @@ impl Session {
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_write_request(
+        &self,
+        framed: &mut Framed<TcpStream, CoraCodec>,
+        msg: CoraMessage,
+        peer: &str,
+    ) -> Result<(), std::io::Error> {
+        // Official Elgato software uses WRITE + flags=NONE + payload=[0x03, reportId, ...]
+        // as a feature report request (mirrors legacy HID protocol pattern).
+        // payload[0] = 0x03 (Studio port command prefix)
+        // payload[1] = reportId
+        if msg.payload.len() >= 2
+            && msg.payload[0] == 0x03
+            && !msg.flags.contains(CoraFlags::VERBATIM)
+        {
+            let report_id = msg.payload[1];
+            let _ = peer;
+            info!("  → WRITE-REQUEST report_id={:#04x} (official software style)", report_id);
+
+            if let Some(payload) = build_response(report_id, &self.config) {
+                let dump_len = payload.len().min(64);
+                info!(
+                    "  ← WRITE-RESPONSE report_id={:#04x} payload_len={} payload[..{}]={:02x?}",
+                    report_id,
+                    payload.len(),
+                    dump_len,
+                    &payload[..dump_len],
+                );
+                let response = CoraMessage::new(
+                    CoraFlags::NONE,
+                    HidOp::Write,
+                    msg.message_id,
+                    Bytes::from(payload),
+                );
+                framed.send(response).await?;
+            } else {
+                info!("  → WRITE-REQUEST {:#04x}: no handler", report_id);
+            }
+            return Ok(());
+        }
+
+        // VERBATIM WRITE = image data or passthrough to child device
+        info!(
+            "  → WRITE flags={:#06x} len={} (data/image)",
+            msg.flags.0,
+            msg.payload.len()
+        );
         Ok(())
     }
 
