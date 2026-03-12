@@ -51,7 +51,12 @@ impl Session {
         let mut framed = Framed::new(stream, CoraCodec);
 
         // --- Send initial keepalive ---
-        if let Err(e) = framed.send(build_keepalive(conn_no, 0)).await {
+        let kp = build_keepalive(conn_no, 0);
+        info!(
+            "SEND keepalive flags={:#06x} hid_op={:#04x} conn_no={}",
+            kp.flags.0, kp.hid_op as u8, conn_no
+        );
+        if let Err(e) = framed.send(kp).await {
             warn!("Failed to send initial keepalive to {}: {}", peer, e);
             return;
         }
@@ -123,9 +128,21 @@ impl Session {
         msg: CoraMessage,
         peer: &str,
     ) -> Result<(), std::io::Error> {
+        // Always log every incoming Cora message at INFO level for protocol analysis
+        let dump_len = msg.payload.len().min(64);
+        info!(
+            "RECV flags={:#06x} hid_op={:#04x} msg_id={:#010x} payload_len={} payload[..{}]={:02x?}",
+            msg.flags.0,
+            msg.hid_op as u8,
+            msg.message_id,
+            msg.payload.len(),
+            dump_len,
+            &msg.payload[..dump_len],
+        );
+
         // Keepalive ACK from client – nothing to do
         if msg.flags.contains(CoraFlags::ACK_NAK) {
-            debug!("ACK from {}", peer);
+            info!("  → ACK/NAK (keepalive response)");
             return Ok(());
         }
 
@@ -134,14 +151,11 @@ impl Session {
                 self.handle_get_report(framed, msg, peer).await?;
             }
             HidOp::SendReport => {
-                // Client sends a feature report (e.g. setBrightness)
                 self.handle_send_report(&msg, peer);
             }
             HidOp::Write => {
-                // Image data or other writes
-                debug!(
-                    "WRITE from {} flags={:#06x} len={}",
-                    peer,
+                info!(
+                    "  → WRITE flags={:#06x} len={}",
                     msg.flags.0,
                     msg.payload.len()
                 );
@@ -167,15 +181,23 @@ impl Session {
         let report_id = match report_id {
             Some(id) => id,
             None => {
-                warn!("GET_REPORT with empty payload from {}", peer);
+                warn!("  → GET_REPORT with empty payload from {}", peer);
                 return Ok(());
             }
         };
 
-        debug!("GET_REPORT {:#04x} from {}", report_id, peer);
+        info!("  → GET_REPORT report_id={:#04x}", report_id);
 
         match build_response(report_id, &self.config) {
             Some(payload) => {
+                let dump_len = payload.len().min(64);
+                info!(
+                    "  ← SEND RESULT report_id={:#04x} payload_len={} payload[..{}]={:02x?}",
+                    report_id,
+                    payload.len(),
+                    dump_len,
+                    &payload[..dump_len],
+                );
                 let response = CoraMessage::new(
                     CoraFlags::RESULT,
                     HidOp::GetReport,
@@ -185,9 +207,7 @@ impl Session {
                 framed.send(response).await?;
             }
             None => {
-                // Report 0x08 is for the secondary port – we are primary, ignore
-                // (client will timeout on 0x08 and see 0x80 response first, setting isPrimary=true)
-                debug!("No response for GET_REPORT {:#04x}", report_id);
+                info!("  → GET_REPORT {:#04x}: no handler, sending no response", report_id);
             }
         }
 
@@ -197,13 +217,15 @@ impl Session {
     fn handle_send_report(&self, msg: &CoraMessage, peer: &str) {
         if msg.payload.len() >= 3 && msg.payload[0] == 0x03 && msg.payload[1] == 0x08 {
             let brightness = msg.payload[2];
-            info!("SET_BRIGHTNESS {} from {}", brightness, peer);
+            info!("  → SET_BRIGHTNESS {} from {}", brightness, peer);
         } else {
-            debug!(
-                "SEND_REPORT from {} len={} data={:02x?}",
+            let dump_len = msg.payload.len().min(64);
+            info!(
+                "  → SEND_REPORT from {} len={} payload[..{}]={:02x?}",
                 peer,
                 msg.payload.len(),
-                &msg.payload[..msg.payload.len().min(8)]
+                dump_len,
+                &msg.payload[..dump_len],
             );
         }
     }
