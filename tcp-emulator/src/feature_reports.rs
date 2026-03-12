@@ -9,7 +9,7 @@
 ///   GET_REPORT flags=NONE payload=[0x03, report_id]  → primary port
 ///
 /// Server responds with flags=RESULT, same message_id, payload as described.
-use crate::studio::{PRODUCT_ID, VENDOR_ID};
+use crate::studio::{BUTTON_COUNT, PRODUCT_ID, VENDOR_ID};
 
 #[derive(Debug, Clone)]
 pub struct DeviceConfig {
@@ -43,6 +43,14 @@ pub fn build_response(report_id: u8, config: &DeviceConfig) -> Option<Vec<u8>> {
         0x87 | 0x88 | 0x89 | 0x8b | 0x8c | 0x8d | 0x8e | 0x8f => {
             Some(build_firmware_generic(report_id, config))
         }
+        // 0x1a: Device ready / operational status poll.
+        // The official software polls this every ~2 seconds until the device is
+        // ready to be shown in the UI. We respond with a minimal "ready" payload.
+        // byte[2]=0x00 (status), byte[3]=BUTTON_COUNT, byte[4]=rows, byte[5]=cols
+        0x1a => Some(build_device_status()),
+        // 0x1c: Unknown operational report (device layout refresh trigger?).
+        // Appears occasionally after 0x1a starts being polled.
+        0x1c => Some(build_generic_ack(0x1c)),
         _ => None,
     }
 }
@@ -116,5 +124,28 @@ fn build_firmware_generic(report_id: u8, config: &DeviceConfig) -> Vec<u8> {
     let ver = config.firmware_version.as_bytes();
     let len = ver.len().min(8);
     buf[8..8 + len].copy_from_slice(&ver[..len]);
+    buf
+}
+
+/// 0x1a — Device ready / operational status.
+/// Exact layout unknown; we encode the device geometry as best-guess.
+/// Stream Deck Studio: 32 buttons (4 rows x 8 cols), 2 encoders.
+fn build_device_status() -> Vec<u8> {
+    let mut buf = vec![0u8; 64];
+    buf[0] = 0x03;
+    buf[1] = 0x1a;
+    buf[2] = 0x00;                         // status = OK / ready
+    buf[3] = BUTTON_COUNT as u8;           // 32 buttons
+    buf[4] = 4;                            // 4 rows
+    buf[5] = 8;                            // 8 cols
+    buf[6] = 2;                            // 2 encoders
+    buf
+}
+
+/// Minimal acknowledgment for unknown operational reports.
+fn build_generic_ack(report_id: u8) -> Vec<u8> {
+    let mut buf = vec![0u8; 64];
+    buf[0] = 0x03;
+    buf[1] = report_id;
     buf
 }
