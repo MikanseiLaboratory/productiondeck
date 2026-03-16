@@ -13,7 +13,7 @@ use tracing::info;
 use clap::Parser;
 
 use crate::feature_reports::DeviceConfig;
-use crate::input::ButtonState;
+use crate::input::{ButtonState, EncoderState};
 use crate::server::{run_server, ServerState};
 use crate::session::SessionCommand;
 use crate::studio::DEFAULT_TCP_PORT;
@@ -113,13 +113,17 @@ async fn main() -> anyhow::Result<()> {
     println!("  firmware: {}", cli.firmware);
     println!("  mac:      {}", cli.mac);
     println!("Commands:");
-    println!("  press <key>      - press button (0-31)");
-    println!("  release <key>    - release button (0-31)");
-    println!("  tap <key>        - press and immediately release button");
-    println!("  status           - list connected clients");
-    println!("  quit             - exit");
+    println!("  press <key>               - press button (0-31)");
+    println!("  release <key>             - release button (0-31)");
+    println!("  tap <key>                 - press and immediately release button");
+    println!("  encoder_press <idx>       - press encoder (0-1)");
+    println!("  encoder_release <idx>     - release encoder (0-1)");
+    println!("  encoder_rotate <idx> <d>  - rotate encoder (0-1) by delta ticks (+/-)");
+    println!("  status                    - list connected clients");
+    println!("  quit                      - exit");
 
     let mut button_state = ButtonState::default();
+    let mut encoder_state = EncoderState::default();
     let mut line = String::new();
 
     loop {
@@ -180,6 +184,45 @@ async fn main() -> anyhow::Result<()> {
                     println!("Usage: tap <key>");
                 }
             }
+            "encoder_press" => {
+                if let Some(idx) = parts.get(1).and_then(|s| s.parse::<usize>().ok()) {
+                    if encoder_state.set_press(idx, true) {
+                        broadcast_encoder(&state_cli, &encoder_state, None).await;
+                        println!("Pressed encoder {}", idx);
+                    } else {
+                        println!("Invalid encoder index {}", idx);
+                    }
+                } else {
+                    println!("Usage: encoder_press <idx>");
+                }
+            }
+            "encoder_release" => {
+                if let Some(idx) = parts.get(1).and_then(|s| s.parse::<usize>().ok()) {
+                    if encoder_state.set_press(idx, false) {
+                        broadcast_encoder(&state_cli, &encoder_state, None).await;
+                        println!("Released encoder {}", idx);
+                    } else {
+                        println!("Invalid encoder index {}", idx);
+                    }
+                } else {
+                    println!("Usage: encoder_release <idx>");
+                }
+            }
+            "encoder_rotate" => {
+                let idx = parts.get(1).and_then(|s| s.parse::<usize>().ok());
+                let delta = parts.get(2).and_then(|s| s.parse::<i8>().ok());
+                match (idx, delta) {
+                    (Some(i), Some(d)) => {
+                        if i < crate::studio::ENCODER_COUNT {
+                            broadcast_encoder(&state_cli, &encoder_state, Some((i, d))).await;
+                            println!("Rotated encoder {} by {}", i, d);
+                        } else {
+                            println!("Invalid encoder index {}", i);
+                        }
+                    }
+                    _ => println!("Usage: encoder_rotate <idx> <delta>"),
+                }
+            }
             "status" => {
                 let s = state_cli.lock().await;
                 if s.sessions.is_empty() {
@@ -212,6 +255,23 @@ async fn main() -> anyhow::Result<()> {
 
 async fn broadcast_input(state: &Arc<Mutex<ServerState>>, button_state: &ButtonState) {
     let payload = button_state.to_payload();
+    let s = state.lock().await;
+    for tx in s.sessions.values() {
+        let _ = tx.try_send(SessionCommand::SendInput(payload.clone()));
+    }
+}
+
+/// Broadcast an encoder event to all connected sessions.
+/// If `rotation` is Some((index, delta)), sends a rotation payload; otherwise sends press state.
+async fn broadcast_encoder(
+    state: &Arc<Mutex<ServerState>>,
+    encoder_state: &EncoderState,
+    rotation: Option<(usize, i8)>,
+) {
+    let payload = match rotation {
+        Some((idx, delta)) => encoder_state.to_rotation_payload(idx, delta),
+        None => encoder_state.to_payload(),
+    };
     let s = state.lock().await;
     for tx in s.sessions.values() {
         let _ = tx.try_send(SessionCommand::SendInput(payload.clone()));

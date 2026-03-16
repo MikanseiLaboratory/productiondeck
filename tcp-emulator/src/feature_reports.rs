@@ -43,14 +43,25 @@ pub fn build_response(report_id: u8, config: &DeviceConfig) -> Option<Vec<u8>> {
         0x87 | 0x88 | 0x89 | 0x8b | 0x8c | 0x8d | 0x8e | 0x8f => {
             Some(build_firmware_generic(report_id, config))
         }
+        // 0x08: Secondary device info (used in a race with 0x80 by getDeviceInfo()).
+        // This emulator acts as Primary only; responding with Secondary info would
+        // cause the client to treat this port as Secondary and then request 0x1C.
+        // We intentionally do NOT respond to 0x08 so the 0x80 (Primary) race wins.
         // 0x1a: Device ready / operational status poll.
         // The official software polls this every ~2 seconds until the device is
         // ready to be shown in the UI. We respond with a minimal "ready" payload.
         // byte[2]=0x00 (status), byte[3]=BUTTON_COUNT, byte[4]=rows, byte[5]=cols
         0x1a => Some(build_device_status()),
-        // 0x1c: Unknown operational report (device layout refresh trigger?).
-        // Appears occasionally after 0x1a starts being polled.
-        0x1c => Some(build_generic_ack(0x1c)),
+        // 0x1c: Child device (Device 2) info.
+        // After getDeviceInfo() resolves, autoConnectToSecondaries calls getChildDeviceInfo()
+        // which sends 0x1C. parseDevice2Info() expects a 128-byte buffer:
+        //   offset  4: connection status (0x02 = connected, anything else = not connected)
+        //   offset 26-27: child VendorID (u16 LE)
+        //   offset 28-29: child ProductID (u16 LE)
+        //   offset 94-124: child serial number (ASCII, NULL-terminated)
+        //   offset 126-127: child TCP port (u16 LE)
+        // We return "no child device connected" (offset[4]=0x00).
+        0x1c => Some(build_device2_info_none()),
         _ => None,
     }
 }
@@ -130,24 +141,34 @@ fn build_firmware_generic(report_id: u8, config: &DeviceConfig) -> Vec<u8> {
 /// 0x1a — Device panel/display ready status.
 /// The official software polls this every ~2 seconds after "Wake up".
 /// byte[2] = number of panels currently ready; byte[3] = total panel count.
-/// Software may wait until byte[2] == byte[3] (all panels ready).
+/// Software waits until byte[2] == byte[3] (all panels ready) before proceeding.
 /// Stream Deck Studio: 32 LCD panels (4 rows x 8 cols), 2 encoders.
+///
+/// NOTE: The exact byte layout below is inferred from node-elgato source code and
+/// has NOT been verified against a real device capture. If the official software
+/// stalls polling on 0x1A without progressing to UI display, capture the real
+/// device response and update the offsets here (TODO: verify with hardware capture).
 fn build_device_status() -> Vec<u8> {
     let mut buf = vec![0u8; 64];
     buf[0] = 0x03;
     buf[1] = 0x1a;
     buf[2] = BUTTON_COUNT as u8;           // ready panels = 32 (all ready)
     buf[3] = BUTTON_COUNT as u8;           // total panels = 32
-    buf[4] = 4;                            // 4 rows
-    buf[5] = 8;                            // 8 cols
-    buf[6] = 2;                            // 2 encoders
+    buf[4] = 4;                            // rows
+    buf[5] = 8;                            // cols
+    buf[6] = 2;                            // encoder count
     buf
 }
 
-/// Minimal acknowledgment for unknown operational reports.
-fn build_generic_ack(report_id: u8) -> Vec<u8> {
-    let mut buf = vec![0u8; 64];
+/// 0x1c — Child device (Device 2) info.
+/// Returns "no child device connected": 128-byte buffer with offset[4]=0x00.
+/// parseDevice2Info() checks data[4] == 0x02 for "connected"; any other value
+/// means "not connected" and the client skips secondary auto-connect.
+fn build_device2_info_none() -> Vec<u8> {
+    let mut buf = vec![0u8; 128];
     buf[0] = 0x03;
-    buf[1] = report_id;
+    buf[1] = 0x1c;
+    // buf[4] = 0x00 (default) → not connected
     buf
 }
+

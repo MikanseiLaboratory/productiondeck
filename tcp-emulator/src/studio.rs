@@ -14,6 +14,9 @@ pub const DEFAULT_TCP_PORT: u16 = 5343;
 /// Number of physical buttons on Stream Deck Studio
 pub const BUTTON_COUNT: usize = 32;
 
+/// Number of encoders (dials) on Stream Deck Studio
+pub const ENCODER_COUNT: usize = 2;
+
 #[allow(dead_code)]
 
 /// Gen2 input: KEY_DATA_OFFSET = 3

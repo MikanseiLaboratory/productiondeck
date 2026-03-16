@@ -50,8 +50,12 @@ impl Session {
         let conn_no = GLOBAL_CONN_NO.fetch_add(1, Ordering::Relaxed);
         let mut framed = Framed::new(stream, CoraCodec);
 
+        // message_id starts at conn_no+1 (non-zero) and increments per keepalive.
+        let mut next_msg_id: u32 = conn_no as u32 + 1;
+
         // --- Send initial keepalive ---
-        let kp = build_keepalive(conn_no, 0);
+        let kp = build_keepalive(conn_no, next_msg_id);
+        next_msg_id = next_msg_id.wrapping_add(1);
         info!(
             "SEND keepalive flags={:#06x} hid_op={:#04x} conn_no={}",
             kp.flags.0, kp.hid_op as u8, conn_no
@@ -70,9 +74,10 @@ impl Session {
                 // Periodic keepalive
                 _ = keepalive_timer.tick() => {
                     debug!("Sending keepalive to {}", peer);
-                    if framed.send(build_keepalive(conn_no, 0)).await.is_err() {
+                    if framed.send(build_keepalive(conn_no, next_msg_id)).await.is_err() {
                         break;
                     }
+                    next_msg_id = next_msg_id.wrapping_add(1);
                 }
 
                 // Incoming message from client
@@ -241,8 +246,8 @@ impl Session {
                     &payload[..dump_len],
                 );
                 let response = CoraMessage::new(
-                    CoraFlags::NONE,
-                    HidOp::Write,
+                    CoraFlags::RESULT,
+                    HidOp::GetReport,
                     msg.message_id,
                     Bytes::from(payload),
                 );
