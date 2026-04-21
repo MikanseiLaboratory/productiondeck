@@ -108,10 +108,10 @@ pub fn run_multicore(
             let executor1 = EXECUTOR1.init(Executor::new());
             executor1.run(|spawner| match core1_buf {
                 MulticoreCore1Buffer::B8192 => {
-                    unwrap!(spawner.spawn(multicore_core1_image_task_8192(device)));
+                    unwrap!(multicore_core1_image_task_8192(device).map(|t| spawner.spawn(t)));
                 }
                 MulticoreCore1Buffer::B16384 => {
-                    unwrap!(spawner.spawn(multicore_core1_image_task_16384(device)));
+                    unwrap!(multicore_core1_image_task_16384(device).map(|t| spawner.spawn(t)));
                 }
             });
         },
@@ -119,15 +119,16 @@ pub fn run_multicore(
 
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
-        unwrap!(spawner.spawn(multicore_core0_supervisor_task(supervisor)));
+        unwrap!(multicore_core0_supervisor_task(supervisor).map(|t| spawner.spawn(t)));
         match layout {
             MulticoreCore0Layout::MiniOrModule6Direct => {
-                unwrap!(spawner.spawn(usb::usb_task_for_device(
+                unwrap!(usb::usb_task_for_device(
                     Driver::new(p.USB, crate::Irqs),
                     Output::new(p.PIN_20, Level::Low),
                     device,
-                )));
-                unwrap!(spawner.spawn(buttons::button_task_direct({
+                )
+                .map(|t| spawner.spawn(t)));
+                unwrap!(buttons::button_task_direct({
                     let mut inputs = heapless::Vec::new();
                     let _ = inputs.push(Input::new(p.PIN_4, Pull::Up));
                     let _ = inputs.push(Input::new(p.PIN_5, Pull::Up));
@@ -136,19 +137,22 @@ pub fn run_multicore(
                     let _ = inputs.push(Input::new(p.PIN_11, Pull::Up));
                     let _ = inputs.push(Input::new(p.PIN_12, Pull::Up));
                     inputs
-                })));
-                unwrap!(spawner.spawn(hardware::status_task(
+                })
+                .map(|t| spawner.spawn(t)));
+                unwrap!(hardware::status_task(
                     Output::new(p.PIN_25, Level::Low),
                     Output::new(p.PIN_21, Level::Low),
-                )));
+                )
+                .map(|t| spawner.spawn(t)));
             }
             MulticoreCore0Layout::Module15Matrix => {
-                unwrap!(spawner.spawn(usb::usb_task_for_device(
+                unwrap!(usb::usb_task_for_device(
                     Driver::new(p.USB, crate::Irqs),
                     Output::new(p.PIN_20, Level::Low),
                     device,
-                )));
-                unwrap!(spawner.spawn(buttons::button_task_matrix_5x3(
+                )
+                .map(|t| spawner.spawn(t)));
+                unwrap!(buttons::button_task_matrix_5x3(
                     Output::new(p.PIN_2, Level::High),
                     Output::new(p.PIN_3, Level::High),
                     Output::new(p.PIN_7, Level::High),
@@ -157,19 +161,22 @@ pub fn run_multicore(
                     Input::new(p.PIN_6, Pull::Up),
                     Input::new(p.PIN_10, Pull::Up),
                     Input::new(p.PIN_11, Pull::Up),
-                )));
-                unwrap!(spawner.spawn(hardware::status_task(
+                )
+                .map(|t| spawner.spawn(t)));
+                unwrap!(hardware::status_task(
                     Output::new(p.PIN_25, Level::Low),
                     Output::new(p.PIN_21, Level::Low),
-                )));
+                )
+                .map(|t| spawner.spawn(t)));
             }
             MulticoreCore0Layout::Module32Matrix => {
-                unwrap!(spawner.spawn(usb::usb_task_for_device(
+                unwrap!(usb::usb_task_for_device(
                     Driver::new(p.USB, crate::Irqs),
                     Output::new(p.PIN_25, Level::Low),
                     device,
-                )));
-                unwrap!(spawner.spawn(buttons::button_task_matrix_8x4(
+                )
+                .map(|t| spawner.spawn(t)));
+                unwrap!(buttons::button_task_matrix_8x4(
                     Output::new(p.PIN_2, Level::High),
                     Output::new(p.PIN_3, Level::High),
                     Output::new(p.PIN_7, Level::High),
@@ -182,11 +189,13 @@ pub fn run_multicore(
                     Input::new(p.PIN_12, Pull::Up),
                     Input::new(p.PIN_13, Pull::Up),
                     Input::new(p.PIN_16, Pull::Up),
-                )));
-                unwrap!(spawner.spawn(hardware::status_task(
+                )
+                .map(|t| spawner.spawn(t)));
+                unwrap!(hardware::status_task(
                     Output::new(p.PIN_20, Level::Low),
                     Output::new(p.PIN_21, Level::Low),
-                )));
+                )
+                .map(|t| spawner.spawn(t)));
             }
         }
     });

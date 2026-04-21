@@ -15,7 +15,8 @@ use embassy_rp::peripherals;
 use embassy_rp::usb::Driver;
 use embassy_time::{Duration, Timer};
 use embassy_usb::class::hid::{
-    Config as HidConfig, HidReaderWriter, ReportId, RequestHandler, State,
+    Config as HidConfig, HidBootProtocol, HidReaderWriter, HidSubclass, ReportId, RequestHandler,
+    State,
 };
 use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config};
@@ -276,6 +277,8 @@ async fn usb_task_impl(
         request_handler: unsafe { REQUEST_HANDLER.as_mut().map(|h| h as _) },
         poll_ms: config::USB_POLL_RATE_MS as u8,
         max_packet_size: 64, // RP2040 USB hardware limitation
+        hid_subclass: HidSubclass::No,
+        hid_boot_protocol: HidBootProtocol::None,
     };
 
     info!(
