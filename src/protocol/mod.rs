@@ -3,13 +3,12 @@
 //! Handles different protocol versions (V1 and V2) with unified interface
 
 pub mod module;
-pub mod module_15_32;
 pub mod module_6;
 pub mod v1;
 pub mod v2;
 
 use crate::config::IMAGE_BUFFER_SIZE;
-use crate::device::ProtocolVersion;
+use crate::device::{Device, DeviceConfig, ProtocolVersion};
 use crate::protocol::module::ModuleSetCommand;
 use heapless::Vec;
 
@@ -17,16 +16,35 @@ use heapless::Vec;
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum OutputReportResult {
-    /// Update Key Image (Module 15/32: cmd 0x07, Module 6: cmd 0x01 with ShowFlag=1)
+    /// Update Key Image (cmd 0x07)
     KeyImageComplete {
         key_id: u8,
         image: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
-    /// Update Full Screen Image (Module 15/32: cmd 0x08)
+    /// Full LCD JPEG transfer complete (cmd 0x08)
+    FullScreenImageComplete {
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
+    /// Window strip JPEG complete (cmd 0x0B)
+    WindowImageComplete {
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
+    /// Partial window JPEG complete (cmd 0x0C)
+    PartialWindowImageComplete {
+        x: u16,
+        y: u16,
+        width: u16,
+        height: u16,
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
+    /// Background slot JPEG complete (cmd 0x0D)
+    BackgroundImageComplete {
+        index: u8,
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
+    /// Legacy / in-progress chunk (not assembled)
     FullScreenImageChunk,
-    /// Update Boot Logo (Module 15/32: cmd 0x09, Module 6 uses Feature combo)
     BootLogoImageChunk,
-    /// Output report not recognized/unsupported for current device
     Unhandled,
 }
 
@@ -48,7 +66,7 @@ pub enum ImageProcessResult {
 /// Button mapping result for different devices
 #[derive(Debug)]
 pub struct ButtonMapping {
-    pub mapped_buttons: [bool; 32], // Max buttons supported (XL has 32)
+    pub mapped_buttons: [bool; crate::types::MAX_BUTTON_SLOTS],
     pub active_count: usize,
 }
 
@@ -95,20 +113,16 @@ pub enum ProtocolHandler {
     V1(v1::V1Handler),
     V2(v2::V2Handler),
     Module6Keys(module_6::Module6KeysHandler),
-    Module15_32Keys(module_15_32::Module15_32KeysHandler),
 }
 
 impl ProtocolHandler {
-    /// Create appropriate protocol handler based on version
-    pub fn create(version: ProtocolVersion) -> Self {
-        match version {
+    /// Create handler for a compile-time / runtime selected device (preferred).
+    pub fn create_for_device(device: Device) -> Self {
+        match device.usb_config().protocol {
             ProtocolVersion::V1 => ProtocolHandler::V1(v1::V1Handler::new()),
-            ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new()),
+            ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new(device)),
             ProtocolVersion::Module6Keys => {
                 ProtocolHandler::Module6Keys(module_6::Module6KeysHandler::new())
-            }
-            ProtocolVersion::Module15_32Keys => {
-                ProtocolHandler::Module15_32Keys(module_15_32::Module15_32KeysHandler::new())
             }
         }
     }
@@ -119,7 +133,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(_) => ProtocolVersion::V1,
             ProtocolHandler::V2(_) => ProtocolVersion::V2,
             ProtocolHandler::Module6Keys(_) => ProtocolVersion::Module6Keys,
-            ProtocolHandler::Module15_32Keys(_) => ProtocolVersion::Module15_32Keys,
         }
     }
 
@@ -129,7 +142,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.parse_output_report(data),
             ProtocolHandler::V2(handler) => handler.parse_output_report(data),
             ProtocolHandler::Module6Keys(handler) => handler.parse_output_report(data),
-            ProtocolHandler::Module15_32Keys(handler) => handler.parse_output_report(data),
         }
     }
 
@@ -151,9 +163,6 @@ impl ProtocolHandler {
             ProtocolHandler::Module6Keys(handler) => {
                 handler.map_buttons(physical_buttons, cols, rows, left_to_right)
             }
-            ProtocolHandler::Module15_32Keys(handler) => {
-                handler.map_buttons(physical_buttons, cols, rows, left_to_right)
-            }
         }
     }
 
@@ -163,7 +172,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.hid_descriptor(),
             ProtocolHandler::V2(handler) => handler.hid_descriptor(),
             ProtocolHandler::Module6Keys(handler) => handler.hid_descriptor(),
-            ProtocolHandler::Module15_32Keys(handler) => handler.hid_descriptor(),
         }
     }
 
@@ -173,7 +181,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.input_report_size(button_count),
             ProtocolHandler::V2(handler) => handler.input_report_size(button_count),
             ProtocolHandler::Module6Keys(handler) => handler.input_report_size(button_count),
-            ProtocolHandler::Module15_32Keys(handler) => handler.input_report_size(button_count),
         }
     }
 
@@ -183,9 +190,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::V2(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::Module6Keys(handler) => handler.format_button_report(buttons, report),
-            ProtocolHandler::Module15_32Keys(handler) => {
-                handler.format_button_report(buttons, report)
-            }
         }
     }
 
@@ -199,9 +203,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::V2(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::Module6Keys(handler) => handler.handle_feature_report(report_id, data),
-            ProtocolHandler::Module15_32Keys(handler) => {
-                handler.handle_feature_report(report_id, data)
-            }
         }
     }
 
@@ -211,7 +212,6 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.get_feature_report(report_id, buf),
             ProtocolHandler::V2(handler) => handler.get_feature_report(report_id, buf),
             ProtocolHandler::Module6Keys(handler) => handler.get_feature_report(report_id, buf),
-            ProtocolHandler::Module15_32Keys(handler) => handler.get_feature_report(report_id, buf),
         }
     }
 }

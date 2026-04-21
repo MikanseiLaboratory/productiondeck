@@ -1,6 +1,6 @@
 //! StreamDeck Mini device configurations
 //!
-//! Supports both the original Mini (PID 0x0063) and Revised Mini (PID 0x0090)
+//! Supports the original Mini (PID 0x0063) and Mini 2022 (PID 0x0090).
 
 use super::{ButtonLayout, DeviceConfig, DisplayConfig, ImageFormat, ProtocolVersion, UsbConfig};
 
@@ -38,12 +38,12 @@ impl DeviceConfig for MiniConfig {
     }
 }
 
-/// StreamDeck Revised Mini configuration (PID: 0x0090)
+/// Stream Deck Mini 2022 configuration (PID: 0x0090)
 pub struct RevisedMiniConfig;
 
 impl DeviceConfig for RevisedMiniConfig {
     fn device_name(&self) -> &'static str {
-        "StreamDeck Revised Mini"
+        "StreamDeck Mini 2022"
     }
 
     fn button_layout(&self) -> ButtonLayout {

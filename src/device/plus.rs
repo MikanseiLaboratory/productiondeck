@@ -1,10 +1,10 @@
 //! StreamDeck Plus device configuration
 //!
-//! The StreamDeck Plus with 8 keys and additional controls (PID: 0x0080)
+//! Stream Deck + (PID 0x0084)
 
 use super::{ButtonLayout, DeviceConfig, DisplayConfig, ImageFormat, ProtocolVersion, UsbConfig};
 
-/// StreamDeck Plus configuration (PID: 0x0080)
+/// Stream Deck + configuration (PID: 0x0084)
 pub struct PlusConfig;
 
 impl DeviceConfig for PlusConfig {

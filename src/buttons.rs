@@ -10,14 +10,14 @@ use embassy_time::{Duration, Instant, Timer};
 
 use crate::channels::BUTTON_CHANNEL;
 use crate::config::*;
-use crate::types::ButtonState;
+use crate::types::{ButtonState, MAX_BUTTON_SLOTS};
 
 // ===================================================================
 // Button Debouncing State
 // ===================================================================
 
 struct ButtonDebouncer {
-    buttons: [ButtonDebounceState; 32], // Max keys for any device
+    buttons: [ButtonDebounceState; MAX_BUTTON_SLOTS],
 }
 
 #[derive(Clone, Copy)]
@@ -34,7 +34,7 @@ impl ButtonDebouncer {
                 current: false,
                 raw: false,
                 last_change: Instant::now(),
-            }; 32], // Max keys for any device
+            }; MAX_BUTTON_SLOTS],
         }
     }
 
@@ -75,8 +75,8 @@ impl<const ROWS: usize, const COLS: usize> ButtonMatrix<ROWS, COLS> {
         Self { rows, cols }
     }
 
-    async fn scan(&mut self) -> [bool; 32] {
-        let mut button_states = [false; 32]; // Max keys for any device
+    async fn scan(&mut self) -> [bool; MAX_BUTTON_SLOTS] {
+        let mut button_states = [false; MAX_BUTTON_SLOTS];
 
         for row_idx in 0..ROWS {
             // Pull current row low
@@ -106,7 +106,7 @@ async fn run_matrix_task<const ROWS: usize, const COLS: usize>(
 ) {
     let mut debouncer = ButtonDebouncer::new();
     let mut _last_button_state = ButtonState {
-        buttons: [false; 32],
+        buttons: [false; MAX_BUTTON_SLOTS],
         changed: false,
         active_count: active_keys,
     };
@@ -152,6 +152,21 @@ async fn run_matrix_task<const ROWS: usize, const COLS: usize>(
 // ===================================================================
 
 #[embassy_executor::task]
+#[allow(clippy::too_many_arguments)]
+pub async fn button_task_matrix_4x2(
+    row0: Output<'static>,
+    row1: Output<'static>,
+    col0: Input<'static>,
+    col1: Input<'static>,
+    col2: Input<'static>,
+    col3: Input<'static>,
+) {
+    info!("Button task (matrix 4x2) started");
+    let matrix = ButtonMatrix::<2, 4>::new([row0, row1], [col0, col1, col2, col3]);
+    run_matrix_task::<2, 4>(matrix, 8).await;
+}
+
+#[embassy_executor::task]
 pub async fn button_task_matrix_3x2(
     row0: Output<'static>,
     row1: Output<'static>,
@@ -179,6 +194,31 @@ pub async fn button_task_matrix_5x3(
     info!("Button task (matrix 5x3) started");
     let matrix = ButtonMatrix::<3, 5>::new([row0, row1, row2], [col0, col1, col2, col3, col4]);
     run_matrix_task::<3, 5>(matrix, 15).await;
+}
+
+#[embassy_executor::task]
+#[allow(clippy::too_many_arguments)]
+pub async fn button_task_matrix_9x4(
+    row0: Output<'static>,
+    row1: Output<'static>,
+    row2: Output<'static>,
+    row3: Output<'static>,
+    col0: Input<'static>,
+    col1: Input<'static>,
+    col2: Input<'static>,
+    col3: Input<'static>,
+    col4: Input<'static>,
+    col5: Input<'static>,
+    col6: Input<'static>,
+    col7: Input<'static>,
+    col8: Input<'static>,
+) {
+    info!("Button task (matrix 9x4) started");
+    let matrix = ButtonMatrix::<4, 9>::new(
+        [row0, row1, row2, row3],
+        [col0, col1, col2, col3, col4, col5, col6, col7, col8],
+    );
+    run_matrix_task::<4, 9>(matrix, 36).await;
 }
 
 #[embassy_executor::task]
@@ -215,7 +255,7 @@ pub async fn button_task_direct(inputs: heapless::Vec<Input<'static>, 32>) {
 
     let mut debouncer = ButtonDebouncer::new();
     let mut _last_button_state = ButtonState {
-        buttons: [false; 32],
+        buttons: [false; MAX_BUTTON_SLOTS],
         changed: false,
         active_count: inputs.len(),
     };
@@ -225,7 +265,7 @@ pub async fn button_task_direct(inputs: heapless::Vec<Input<'static>, 32>) {
 
     loop {
         // Read all inputs directly (active-low with pull-ups)
-        let mut raw_states = [false; 32];
+        let mut raw_states = [false; MAX_BUTTON_SLOTS];
         for (i, pin) in inputs.iter().enumerate() {
             raw_states[i] = !pin.is_high();
         }

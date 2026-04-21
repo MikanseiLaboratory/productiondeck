@@ -103,6 +103,24 @@ test = false
 bench = false
 
 [[bin]]
+name = "mk2"
+path = "src/bin/mk2.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "neo"
+path = "src/bin/neo.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "plus-xl"
+path = "src/bin/plus_xl.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "module6"
 path = "src/bin/module6.rs"
 test = false

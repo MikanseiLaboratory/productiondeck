@@ -59,8 +59,7 @@ struct StreamDeckHidHandler {
 
 impl StreamDeckHidHandler {
     fn new_for_device(device: Device) -> Self {
-        let protocol_version = device.usb_config().protocol;
-        let protocol_handler = ProtocolHandler::create(protocol_version);
+        let protocol_handler = ProtocolHandler::create_for_device(device);
 
         Self {
             protocol_handler,
@@ -108,6 +107,26 @@ impl RequestHandler for StreamDeckHidHandler {
                             crate::config::set_idle_time_seconds(seconds);
                             info!("Set idle time to {} seconds", seconds);
                         }
+                        ModuleSetCommand::FillLcdColor { r, g, b } => {
+                            let _ = self.usb_command_sender.try_send(UsbCommand::FillLcdColor {
+                                r,
+                                g,
+                                b,
+                            });
+                        }
+                        ModuleSetCommand::SetKeyColor { key_index, r, g, b } => {
+                            let _ = self.usb_command_sender.try_send(UsbCommand::FillKeyColor {
+                                key_index,
+                                r,
+                                g,
+                                b,
+                            });
+                        }
+                        ModuleSetCommand::ShowBackgroundByIndex { index } => {
+                            let _ = self
+                                .usb_command_sender
+                                .try_send(UsbCommand::ShowBackgroundByIndex { index });
+                        }
                         _ => {}
                     }
                 }
@@ -140,6 +159,38 @@ impl StreamDeckHidHandler {
                     data: image,
                 });
             }
+            OutputReportResult::FullScreenImageComplete { image } => {
+                let _ = self
+                    .usb_command_sender
+                    .try_send(UsbCommand::FullScreenImage { data: image });
+            }
+            OutputReportResult::WindowImageComplete { image } => {
+                let _ = self
+                    .usb_command_sender
+                    .try_send(UsbCommand::WindowImage { data: image });
+            }
+            OutputReportResult::PartialWindowImageComplete {
+                x,
+                y,
+                width,
+                height,
+                image,
+            } => {
+                let _ = self
+                    .usb_command_sender
+                    .try_send(UsbCommand::PartialWindowImage {
+                        x,
+                        y,
+                        width,
+                        height,
+                        data: image,
+                    });
+            }
+            OutputReportResult::BackgroundImageComplete { index, image } => {
+                let _ = self
+                    .usb_command_sender
+                    .try_send(UsbCommand::BackgroundImage { index, data: image });
+            }
             OutputReportResult::FullScreenImageChunk => {
                 debug!("Full screen image chunk received (not assembled)");
             }
@@ -156,11 +207,6 @@ impl StreamDeckHidHandler {
 // ===================================================================
 // USB Task Implementation
 // ===================================================================
-
-#[embassy_executor::task]
-pub async fn usb_task(driver: Driver<'static, peripherals::USB>, usb_led: Output<'static>) {
-    usb_task_impl(driver, usb_led, config::get_current_device()).await
-}
 
 #[embassy_executor::task]
 pub async fn usb_task_for_device(
@@ -214,7 +260,7 @@ async fn usb_task_impl(
     }
 
     // Get HID descriptor from protocol handler
-    let protocol_handler = ProtocolHandler::create(device.usb_config().protocol);
+    let protocol_handler = ProtocolHandler::create_for_device(device);
     let hid_descriptor = protocol_handler.hid_descriptor();
 
     let hid_config = HidConfig {
@@ -270,12 +316,62 @@ async fn usb_task_impl(
                         key_id,
                         data.len()
                     );
-                    // Send to core 1 for processing via inter-core channel
-                    // TODO: Replace with actual inter-core channel when implemented
                     let _ = DISPLAY_CHANNEL
                         .sender()
                         .send(DisplayCommand::DisplayImage { key_id, data })
                         .await;
+                }
+                UsbCommand::FullScreenImage { data } => {
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::DisplayFullScreen { data })
+                        .await;
+                }
+                UsbCommand::WindowImage { data } => {
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::DisplayWindow { data })
+                        .await;
+                }
+                UsbCommand::PartialWindowImage {
+                    x,
+                    y,
+                    width,
+                    height,
+                    data,
+                } => {
+                    debug!(
+                        "Partial window {}x{}@{},{} ({} bytes)",
+                        width,
+                        height,
+                        x,
+                        y,
+                        data.len()
+                    );
+                }
+                UsbCommand::BackgroundImage { index, data } => {
+                    debug!("Background {} ({} bytes)", index, data.len());
+                }
+                UsbCommand::FillLcdColor { r, g, b } => {
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::FillLcd { r, g, b })
+                        .await;
+                }
+                UsbCommand::FillKeyColor { key_index, r, g, b } => {
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::FillKey { key_index, r, g, b })
+                        .await;
+                }
+                UsbCommand::ShowBackgroundByIndex { index } => {
+                    debug!("Show background index {}", index);
+                }
+                UsbCommand::TouchActivity(t) => {
+                    debug!("Touch activity: {:?}", t);
+                }
+                UsbCommand::EncoderActivity(e) => {
+                    debug!("Encoder activity: {:?}", e);
                 }
             }
         }
@@ -284,10 +380,10 @@ async fn usb_task_impl(
     // Spawn combined IO future: send button reports and read OUT image packets
     let io_fut = async {
         let receiver = BUTTON_CHANNEL.receiver();
-        let protocol_handler = ProtocolHandler::create(device.usb_config().protocol);
+        let protocol_handler = ProtocolHandler::create_for_device(device);
 
         // OUT image reader protocol state
-        let mut out_protocol = ProtocolHandler::create(device.usb_config().protocol);
+        let mut out_protocol = ProtocolHandler::create_for_device(device);
         let mut out_buf = [0u8; 4096];
 
         // Button sender loop
@@ -297,12 +393,15 @@ async fn usb_task_impl(
 
                 if button_state.changed {
                     let layout = device.button_layout();
-                    let button_mapping = protocol_handler.map_buttons(
+                    let mut button_mapping = protocol_handler.map_buttons(
                         &button_state.buttons,
                         layout.cols,
                         layout.rows,
                         layout.left_to_right,
                     );
+                    button_mapping.active_count = device
+                        .protocol_input_key_count()
+                        .min(crate::types::MAX_BUTTON_SLOTS);
 
                     let mut report = [0u8; 64]; // RP2040 USB hardware limitation
                     let report_len =
@@ -339,6 +438,38 @@ async fn usb_task_impl(
                                         },
                                     );
                                     info!("Image complete for key {} ({} bytes)", key_id, img_len);
+                                }
+                                OutputReportResult::FullScreenImageComplete { image } => {
+                                    let _ = USB_COMMAND_CHANNEL
+                                        .sender()
+                                        .try_send(UsbCommand::FullScreenImage { data: image });
+                                }
+                                OutputReportResult::WindowImageComplete { image } => {
+                                    let _ = USB_COMMAND_CHANNEL
+                                        .sender()
+                                        .try_send(UsbCommand::WindowImage { data: image });
+                                }
+                                OutputReportResult::PartialWindowImageComplete {
+                                    x,
+                                    y,
+                                    width,
+                                    height,
+                                    image,
+                                } => {
+                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
+                                        UsbCommand::PartialWindowImage {
+                                            x,
+                                            y,
+                                            width,
+                                            height,
+                                            data: image,
+                                        },
+                                    );
+                                }
+                                OutputReportResult::BackgroundImageComplete { index, image } => {
+                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
+                                        UsbCommand::BackgroundImage { index, data: image },
+                                    );
                                 }
                                 OutputReportResult::FullScreenImageChunk => {}
                                 OutputReportResult::BootLogoImageChunk => {}

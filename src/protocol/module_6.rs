@@ -141,7 +141,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         rows: usize,
         left_to_right: bool,
     ) -> ButtonMapping {
-        let mut mapped = [false; 32];
+        let mut mapped = [false; crate::types::MAX_BUTTON_SLOTS];
 
         for y in 0..rows {
             for x in 0..cols {
@@ -151,7 +151,8 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
                     y * cols + (cols - 1 - x)
                 };
                 let dst_index = y * cols + x;
-                if src_index < physical_buttons.len() && dst_index < 32 {
+                if src_index < physical_buttons.len() && dst_index < crate::types::MAX_BUTTON_SLOTS
+                {
                     mapped[dst_index] = physical_buttons[src_index];
                 }
             }

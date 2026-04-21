@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-ProductionDeck is an open-source RP2040-based StreamDeck Mini alternative implemented in Rust using the Embassy async framework. It provides full compatibility with official StreamDeck software by implementing the exact USB HID protocol. The device features 6 programmable keys with a shared 80x80 pixel TFT display.
+ProductionDeck is an open-source RP2040-based Stream Deck–compatible firmware in Rust (Embassy). Multiple **device profiles** (Mini, Classic/Mk.2, XL, Neo, +, modules, etc.) share the same codebase; each profile selects USB PID, layout, and **Legacy (Mini)** vs **Main/Expanded** HID handling. Physical hardware is often a small key matrix + one ST7735 region unless you build a larger layout.
 
 **Current Status**: Alpha - Firmware compiles successfully, ready for hardware testing.
 
@@ -50,11 +50,14 @@ cargo doc --open
 ## Project Structure
 
 ### Core Source Files
-- `src/main.rs` - Application entry point and task coordination
+- `src/bin/*.rs` - One binary per target device (`mini`, `xl`, `mk2`, `neo`, `plus-xl`, …)
+- `src/lib.rs` - Library root (`productiondeck` crate)
 - `src/config.rs` - Hardware configuration constants and pin assignments
-- `src/usb.rs` - USB HID implementation and StreamDeck protocol handling
+- `src/device/mod.rs` - USB PID, layout, and protocol family per `Device`
+- `src/protocol/v1.rs` / `v2.rs` / `module_6.rs` - HID protocol handlers
+- `src/usb.rs` - USB HID class and routing to protocol + channels
 - `src/display.rs` - Display handling and graphics rendering
-- `src/buttons.rs` - Button scanning and debouncing logic
+- `src/buttons.rs` - Button matrix / direct scanning
 
 ### Configuration Files
 - `Cargo.toml` - Rust project manifest and dependencies
@@ -65,22 +68,21 @@ cargo doc --open
 ### Documentation
 - `README.md` - Main project documentation
 - `LICENSE` - MIT License
-- `StreamDeck_Protocol_Reference.md` - Protocol documentation
-- `StreamDeck_USB_Implementation.md` - USB implementation details
+- `StreamDeck_Protocol_Reference.md` - Protocol documentation (Elgato HID API alignment)
 
 ## Architecture Overview
 
 ### Hardware Configuration
 - **Target**: Raspberry Pi Pico (RP2040 dual-core ARM Cortex-M0+)
-- **USB Identity**: VID 0x0fd9 (Elgato), PID 0x0063 (StreamDeck Mini)
-- **Display**: 1x ST7735 TFT (80x80 pixels) shared by all buttons via SPI
-- **Buttons**: 3x2 matrix scan (6 buttons total)
-- **Protocol**: USB HID compatible with StreamDeck Mini
+- **USB Identity**: VID `0x0FD9` (Elgato); PID depends on selected `Device` (see `src/device/mod.rs`)
+- **Display**: Often 1× ST7735; layout/size depend on profile (`display_config`)
+- **Buttons**: Matrix or direct wiring per `hardware.rs` / `buttons.rs`
+- **Protocol**: Legacy Mini family (`v1`) or Main/Expanded family (`v2`) per Elgato HID docs
 
 ### Core Architecture
 - **Async Embassy framework**: Modern Rust async/await for embedded
 - **Dual-core design**: Core 0 handles USB/protocol, Core 1 handles displays/buttons
-- **USB HID interface**: Exact StreamDeck Mini protocol implementation
+- **USB HID interface**: Stream Deck Mini (legacy) or Main protocol (JPEG + feature reports) per build
 - **Channel communication**: Embassy channels for inter-task communication
 - **Hardware abstraction**: Configurable pin assignments via `config.rs`
 

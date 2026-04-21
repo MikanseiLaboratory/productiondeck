@@ -11,9 +11,9 @@ use embassy_rp::{peripherals, Peripherals};
 use heapless::Vec;
 
 use crate::buttons::{
-    button_task_direct, button_task_matrix_3x2, button_task_matrix_5x3, button_task_matrix_8x4,
+    button_task_direct, button_task_matrix_3x2, button_task_matrix_4x2, button_task_matrix_5x3,
+    button_task_matrix_8x4, button_task_matrix_9x4,
 };
-use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::usb::usb_task_for_device;
 
@@ -49,12 +49,6 @@ pub struct LedPins {
 }
 
 impl HardwareConfig {
-    /// Get hardware configuration for the current device
-    pub fn for_current_device() -> Self {
-        let device = config::get_current_device();
-        Self::for_device(device)
-    }
-
     /// Get hardware configuration for a specific device
     pub fn for_device(device: Device) -> Self {
         let layout = device.button_layout();
@@ -64,8 +58,16 @@ impl HardwareConfig {
             (2, 3) => (&[2u8, 3][..], &[4u8, 5, 6][..]), // Mini
             (3, 5) => (&[2u8, 3, 7][..], &[4u8, 5, 6, 10, 11][..]), // Original
             (4, 8) => (&[2u8, 3, 7, 9][..], &[4u8, 5, 6, 10, 11, 12, 13, 16][..]), // XL
-            (2, 4) => (&[2u8, 3][..], &[4u8, 5, 6, 10][..]), // Plus
-            _ => (&[2u8, 3][..], &[4u8, 5, 6][..]),      // Fallback to Mini
+            (4, 9) => (
+                &[2u8, 3, 7, 9][..],
+                &[4u8, 5, 6, 10, 11, 12, 13, 16, 22][..],
+            ), // + XL
+            (2, 4) => (&[2u8, 3][..], &[4u8, 5, 6, 10][..]), // Plus / Neo
+            _ => core::panic!(
+                "no pin mapping for matrix {}×{}",
+                layout.cols,
+                layout.rows
+            ),
         };
 
         Self {
@@ -86,12 +88,6 @@ impl HardwareConfig {
             },
         }
     }
-}
-
-/// Initialize and spawn all hardware tasks for the current device (runtime selection)
-pub async fn init_hardware_tasks(spawner: &Spawner, p: Peripherals) -> Result<(), SpawnError> {
-    let hw_config = HardwareConfig::for_current_device();
-    init_hardware_tasks_with_config(spawner, p, &hw_config).await
 }
 
 /// Initialize and spawn all hardware tasks for a specific device (compile-time selection)
@@ -127,7 +123,9 @@ pub async fn init_hardware_tasks_core0(
     // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
     if matches!(
         device,
-        crate::device::Device::Mini | crate::device::Device::RevisedMini
+        crate::device::Device::Mini
+            | crate::device::Device::RevisedMini
+            | crate::device::Device::MiniDiscord
     ) {
         crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
     }
@@ -182,7 +180,9 @@ async fn init_hardware_tasks_with_config(
     let device = hw_config.device;
     if matches!(
         device,
-        crate::device::Device::Mini | crate::device::Device::RevisedMini
+        crate::device::Device::Mini
+            | crate::device::Device::RevisedMini
+            | crate::device::Device::MiniDiscord
     ) {
         crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
     }
@@ -226,8 +226,10 @@ fn create_all_pins_for_device(
     if matches!(
         crate::config::button_input_mode(),
         crate::config::ButtonInputMode::Direct
-    ) && matches!(device, Device::Mini | Device::RevisedMini)
-    {
+    ) && matches!(
+        device,
+        Device::Mini | Device::RevisedMini | Device::MiniDiscord
+    ) {
         // Build six dedicated direct-input pins for Mini to avoid partial-move issues
         let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
         let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
@@ -244,6 +246,15 @@ fn create_all_pins_for_device(
                 let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+            }
+            (2, 4) => {
+                // Stream Deck + / Neo (4x2 keys)
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
             }
             (3, 5) => {
                 // 15 Keys Module (5x3)
@@ -271,18 +282,27 @@ fn create_all_pins_for_device(
                 let _ = col_pins.push(Input::new(p.PIN_13, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
             }
-            _ => {
-                // Fallback to Mini layout if unknown
-                warn!(
-                    "Using Mini button layout for {} - implement device-specific layout",
-                    device.device_name()
-                );
+            (4, 9) => {
+                // Stream Deck + XL (9x4)
                 let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
                 let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_9, Level::High));
                 let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_13, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_22, Pull::Up));
             }
+            _ => core::panic!(
+                "no pin mapping for matrix {}×{}",
+                layout.cols,
+                layout.rows
+            ),
         }
     }
 
@@ -308,6 +328,15 @@ fn spawn_button_task_with_pins(
                     let col1 = col_pins.pop().unwrap();
                     let col0 = col_pins.pop().unwrap();
                     spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2))
+                }
+                (2, 4) => {
+                    let row1 = row_pins.pop().unwrap();
+                    let row0 = row_pins.pop().unwrap();
+                    let col3 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix_4x2(row0, row1, col0, col1, col2, col3))
                 }
                 (3, 5) => {
                     let row2 = row_pins.pop().unwrap();
@@ -339,16 +368,30 @@ fn spawn_button_task_with_pins(
                         row0, row1, row2, row3, col0, col1, col2, col3, col4, col5, col6, col7,
                     ))
                 }
-                _ => {
-                    // Fallback to 2x3 minimal
-                    warn!("Unknown layout; falling back to 2x3 matrix task");
+                (4, 9) => {
+                    let row3 = row_pins.pop().unwrap();
+                    let row2 = row_pins.pop().unwrap();
                     let row1 = row_pins.pop().unwrap();
                     let row0 = row_pins.pop().unwrap();
+                    let col8 = col_pins.pop().unwrap();
+                    let col7 = col_pins.pop().unwrap();
+                    let col6 = col_pins.pop().unwrap();
+                    let col5 = col_pins.pop().unwrap();
+                    let col4 = col_pins.pop().unwrap();
+                    let col3 = col_pins.pop().unwrap();
                     let col2 = col_pins.pop().unwrap();
                     let col1 = col_pins.pop().unwrap();
                     let col0 = col_pins.pop().unwrap();
-                    spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2))
+                    spawner.spawn(button_task_matrix_9x4(
+                        row0, row1, row2, row3, col0, col1, col2, col3, col4, col5, col6, col7,
+                        col8,
+                    ))
                 }
+                _ => core::panic!(
+                    "no matrix button task for {}×{}",
+                    layout.cols,
+                    layout.rows
+                ),
             }
         }
         crate::config::ButtonInputMode::Direct => {
@@ -358,7 +401,11 @@ fn spawn_button_task_with_pins(
                 let _ = inputs.push(pin);
             }
             // Ensure Mini has exactly 6 inputs if possible
-            if matches!(device, Device::Mini | Device::RevisedMini) && inputs.len() > 6 {
+            if matches!(
+                device,
+                Device::Mini | Device::RevisedMini | Device::MiniDiscord
+            ) && inputs.len() > 6
+            {
                 while inputs.len() > 6 {
                     let _ = inputs.pop();
                 }

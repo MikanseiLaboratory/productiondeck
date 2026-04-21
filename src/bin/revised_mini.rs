@@ -3,7 +3,7 @@
 //! This binary builds firmware specifically for StreamDeck Revised Mini compatibility:
 //! - 6 keys in 3x2 layout
 //! - 80x80 pixel images per key  
-//! - USB VID:PID 0x0fd9:0x0080
+//! - USB VID:PID 0x0fd9:0x0090 (Mini 2022)
 //! - V1 BMP protocol
 
 #![no_std]
@@ -26,6 +26,7 @@ use productiondeck::*;
 /// Main application entry point for StreamDeck Revised Mini
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    config::init_runtime_device(DEVICE);
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
 

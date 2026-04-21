@@ -3,7 +3,6 @@
 //! This module provides application-level supervision, monitoring,
 //! and lifecycle management functionality.
 
-use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::types::APP_VERSION;
 use defmt::*;
@@ -17,11 +16,6 @@ pub struct AppSupervisor {
 }
 
 impl AppSupervisor {
-    /// Create a new application supervisor
-    pub fn new() -> Self {
-        Self::new_for_device(config::get_current_device())
-    }
-
     /// Create a new application supervisor for a specific device
     pub fn new_for_device(device: Device) -> Self {
         Self {
@@ -106,11 +100,5 @@ impl AppSupervisor {
     /// Get current uptime in seconds
     pub fn uptime(&self) -> u32 {
         self.uptime_seconds
-    }
-}
-
-impl Default for AppSupervisor {
-    fn default() -> Self {
-        Self::new()
     }
 }

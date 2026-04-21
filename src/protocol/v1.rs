@@ -115,8 +115,10 @@ impl ProtocolHandlerTrait for V1Handler {
         rows: usize,
         left_to_right: bool,
     ) -> ButtonMapping {
-        let mut mapped_buttons = [false; 32];
-        let total_keys = cols * rows;
+        let mut mapped_buttons = [false; crate::types::MAX_BUTTON_SLOTS];
+        let total_keys = cols
+            .saturating_mul(rows)
+            .min(crate::types::MAX_BUTTON_SLOTS);
 
         for (physical_idx, &pressed) in physical_buttons.iter().take(total_keys).enumerate() {
             let mapped_idx = if left_to_right {
@@ -125,11 +127,11 @@ impl ProtocolHandlerTrait for V1Handler {
                 // Right-to-left mapping for Original StreamDeck
                 let row = physical_idx / cols;
                 let col = physical_idx % cols;
-                let reversed_col = cols - 1 - col;
+                let reversed_col = cols.saturating_sub(1).saturating_sub(col);
                 row * cols + reversed_col
             };
 
-            if mapped_idx < 32 {
+            if mapped_idx < crate::types::MAX_BUTTON_SLOTS {
                 mapped_buttons[mapped_idx] = pressed;
             }
         }

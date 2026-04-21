@@ -40,6 +40,7 @@ static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::Di
 fn main() -> ! {
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
+    config::init_runtime_device(DEVICE);
 
     // Create application supervisor for Module 15
     let supervisor = supervisor::AppSupervisor::new_for_device(DEVICE);
@@ -168,6 +169,7 @@ async fn core1_image_processing_task() {
                 info!("Core 1: Clearing display for key {}", key_id);
                 // TODO: Implement single key clear
             }
+            _ => {}
         }
     }
 }

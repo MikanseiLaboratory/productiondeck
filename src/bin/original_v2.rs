@@ -27,6 +27,7 @@ use productiondeck::*;
 /// Main application entry point for StreamDeck Original V2
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    config::init_runtime_device(DEVICE);
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
 
