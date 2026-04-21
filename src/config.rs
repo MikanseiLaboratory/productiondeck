@@ -1,40 +1,24 @@
 //! Hardware configuration for ProductionDeck
 //! RP2040-based StreamDeck compatible device with multi-device support
 
-use crate::device::{Device, DeviceConfig};
-use core::sync::atomic::{AtomicI32, AtomicU16, AtomicU8, Ordering};
+use crate::device::{Device, DeviceConfig, RUNTIME_DEVICE_TAG_UNINIT};
+use core::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 
 // ===================================================================
 // Device Selection Configuration
 // ===================================================================
 
-/// Current device PID (can be changed at runtime via device selection)
-/// Default to StreamDeck Mini (0x0063) for backward compatibility
-static CURRENT_DEVICE_PID: AtomicU16 = AtomicU16::new(0x0063);
+static RUNTIME_DEVICE_TAG: AtomicU8 = AtomicU8::new(RUNTIME_DEVICE_TAG_UNINIT);
 
-/// Set the current device type by PID
-pub fn set_device_pid(pid: u16) -> Result<(), &'static str> {
-    if Device::from_pid(pid).is_some() {
-        CURRENT_DEVICE_PID.store(pid, Ordering::Relaxed);
-        Ok(())
-    } else {
-        Err("Unsupported device PID")
-    }
+/// Store the firmware build device (call once from each binary `main` before other tasks).
+pub fn init_runtime_device(device: Device) {
+    RUNTIME_DEVICE_TAG.store(device as u8, Ordering::Relaxed);
 }
 
-/// Get the current device PID
-pub fn get_device_pid() -> u16 {
-    CURRENT_DEVICE_PID.load(Ordering::Relaxed)
-}
-
-/// Get the current device configuration
+/// Active device for [`streamdeck_keys`], USB strings, and display sizing.
 pub fn get_current_device() -> Device {
-    let pid = get_device_pid();
-    Device::from_pid(pid).unwrap_or_else(|| {
-        // Fallback to Mini if current PID is invalid
-        CURRENT_DEVICE_PID.store(0x0063, Ordering::Relaxed);
-        Device::Mini
-    })
+    let tag = RUNTIME_DEVICE_TAG.load(Ordering::Relaxed);
+    Device::from_runtime_tag(tag).expect("init_runtime_device must run before get_current_device")
 }
 
 // ===================================================================
@@ -70,22 +54,6 @@ pub fn button_input_mode() -> ButtonInputMode {
 // USB Configuration - Dynamic based on current device
 // ===================================================================
 
-pub fn usb_vid() -> u16 {
-    get_current_device().usb_config().vid
-}
-
-pub fn usb_pid() -> u16 {
-    get_current_device().usb_config().pid
-}
-
-pub fn usb_manufacturer() -> &'static str {
-    get_current_device().usb_config().manufacturer
-}
-
-pub fn usb_product() -> &'static str {
-    get_current_device().usb_config().product_name
-}
-
 /// Serial number (static for all devices)
 pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
 
@@ -113,64 +81,12 @@ pub fn key_image_size() -> usize {
     display.image_width // Assume square images
 }
 
-pub fn key_image_bytes() -> usize {
-    let display = get_current_device().display_config();
-    display.image_width * display.image_height * 3 // RGB
-}
-
-// ===================================================================
-// USB HID Configuration - Dynamic based on current device
-// ===================================================================
-
-pub fn hid_report_size_input() -> usize {
-    get_current_device().input_report_size()
-}
-
-pub fn hid_report_size_feature() -> usize {
-    get_current_device().feature_report_size()
-}
-
-pub fn hid_report_size_output() -> usize {
-    get_current_device().output_report_size()
-}
-
 // ===================================================================
 // GPIO Pin Assignments - Raspberry Pi Pico
 // ===================================================================
-
-// Button Matrix - Dynamic sizing based on device
-pub fn btn_row_pins() -> &'static [u8] {
-    let rows = streamdeck_rows();
-    match rows {
-        2 => &[2, 3],       // Mini: 2 rows
-        3 => &[2, 3, 7],    // Original: 3 rows
-        4 => &[2, 3, 7, 9], // XL: 4 rows
-        _ => &[2, 3],       // Fallback to 2 rows
-    }
-}
-
-pub fn btn_col_pins() -> &'static [u8] {
-    let cols = streamdeck_cols();
-    match cols {
-        3 => &[4, 5, 6],                     // Mini: 3 cols
-        4 => &[4, 5, 6, 10],                 // Plus: 4 cols
-        5 => &[4, 5, 6, 10, 11],             // Original: 5 cols
-        8 => &[4, 5, 6, 10, 11, 12, 13, 16], // XL: 8 cols
-        _ => &[4, 5, 6],                     // Fallback to 3 cols
-    }
-}
-
-/// Direct input pin assignments (one GPIO per button)
-/// For Mini (6 keys), use six dedicated pins.
-pub fn btn_direct_pins() -> &'static [u8] {
-    let keys = streamdeck_keys();
-    match keys {
-        // StreamDeck Mini and Revised Mini (6 keys)
-        6 => &[4, 5, 6, 10, 11, 12],
-        // Fallback: re-use column pins (may not cover all keys)
-        _ => btn_col_pins(),
-    }
-}
+//
+// Button matrix row/column BCM numbers live in [`crate::hardware::HardwareConfig::for_device`]
+// together with [`crate::hardware::create_all_pins_for_device`] (single source of truth).
 
 // SPI Display Interface
 pub const SPI_MOSI_PIN: u8 = 19; // Data to display
@@ -288,23 +204,3 @@ pub const ST7735_COLOR_MODE_16BIT: u8 = 0x05; // RGB565 format
 pub const RGB565_RED_MASK: u16 = 0xF8;
 pub const RGB565_GREEN_MASK: u16 = 0xFC;
 pub const RGB565_BLUE_SHIFT: u8 = 3;
-
-// ===================================================================
-// Backward Compatibility Constants
-// ===================================================================
-
-/// Backward compatibility - use dynamic functions instead
-#[deprecated(note = "Use streamdeck_keys() function instead")]
-pub const STREAMDECK_KEYS: usize = 6;
-
-#[deprecated(note = "Use streamdeck_cols() function instead")]
-pub const STREAMDECK_COLS: usize = 3;
-
-#[deprecated(note = "Use streamdeck_rows() function instead")]
-pub const STREAMDECK_ROWS: usize = 2;
-
-#[deprecated(note = "Use key_image_size() function instead")]
-pub const KEY_IMAGE_SIZE: usize = 80;
-
-#[deprecated(note = "Use key_image_bytes() function instead")]
-pub const KEY_IMAGE_BYTES: usize = 80 * 80 * 3;

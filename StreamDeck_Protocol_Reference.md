@@ -1,226 +1,57 @@
-# StreamDeck USB HID Protocol Reference
+# Stream Deck USB HID — ProductionDeck reference
 
-## Critical Protocol Details Extracted from rust-streamdeck
+This project follows the **Elgato Stream Deck HID API** documentation:
 
-This document provides exact packet structures and protocol details needed for USB device implementation.
+- [General Reference (Main / Expanded protocol)](https://docs.elgato.com/streamdeck/hid/general)
+- [Stream Deck Mini (Legacy protocol)](https://docs.elgato.com/streamdeck/hid/mini)
 
-## ProductionDeck Implementation Notes
+There are **two protocol families**:
 
-**ProductionDeck** implements the StreamDeck Mini protocol (PID: 0x0063) using:
-- **Language**: Rust with Embassy async framework
-- **Target**: RP2040 (Raspberry Pi Pico)
-- **USB Stack**: Embassy USB with usbd-hid
-- **Protocol Version**: V1 (BMP format, BGR color order)
-- **Display**: Single shared 80x80 ST7735 TFT (all 6 buttons display on same screen)
+| Family | Devices (examples) | Notes |
+|--------|-------------------|--------|
+| **Legacy / Mini** | Mini `0x0063`, Mini 2022 `0x0090`, Mini Discord `0x00B3`, 6-key module `0x00B8` | Different report IDs and image path (BMP); see Mini HID page |
+| **Main / Expanded** | Classic `0x006D`, Mk.2 `0x0080`, XL `0x006C` / `0x008F`, Neo `0x009A`, + `0x0084`, 15/32-key modules `0x00B9`/`0x00BA`, … | JPEG chunks, input report header `RID + cmd + UINT16 len + payload`; General Reference |
 
-The protocol implementation in `src/usb.rs` follows these exact specifications.
+**PID 0x0060** (first-gen Stream Deck): not documented under the Main protocol; firmware may still expose it as legacy V1-style for compatibility.
 
-## USB Device Configuration
+## ProductionDeck `Device` → USB PID (VID `0x0FD9`)
 
-### Required Identifiers
-```
-Vendor ID:  0x0fd9 (Elgato Systems)
-Product IDs:
-  0x0060 - Original (15 keys, 72x72, BMP, V1 protocol)
-  0x0063 - Mini (6 keys, 80x80, BMP, V1 protocol)
-  0x006d - Original V2 (15 keys, 72x72, JPEG, V2 protocol)
-  0x006c - XL (32 keys, 96x96, JPEG, V2 protocol)
-  0x0080 - MK2 (15 keys, 72x72, JPEG, V2 protocol)
-  0x0090 - Revised Mini (6 keys, 80x80, BMP, V1 protocol)
-  0x0084 - Plus (8 keys, 120x120, JPEG, V2 protocol)
-```
+| Variant | PID | Protocol module |
+|---------|-----|-------------------|
+| Mini | `0x0063` | `src/protocol/v1.rs` |
+| RevisedMini (Mini 2022) | `0x0090` | V1 |
+| MiniDiscord | `0x00B3` | V1 |
+| Original | `0x0060` | V1 (non-doc) |
+| OriginalV2 (Classic 2019) | `0x006D` | `src/protocol/v2.rs` |
+| Mk2 | `0x0080` | V2 |
+| Mk2ScissorKeys | `0x00A5` | V2 |
+| Xl | `0x006C` | V2 |
+| Xl2022 | `0x008F` | V2 |
+| Plus | `0x0084` | V2 |
+| PlusXl | `0x0084` | V2 |
+| Neo | `0x009A` | V2 |
+| Module6Keys | `0x00B8` | `src/protocol/module_6.rs` |
+| Module15Keys | `0x00B9` | V2 (same as Classic) |
+| Module32Keys | `0x00BA` | V2 (same as XL) |
 
-## Feature Report Commands
+Plus and + XL share PID `0x0084` in Elgato’s HID summary table; this firmware distinguishes them by build target (`plus` vs `plus-xl`) and [`config::init_runtime_device`](src/config.rs).
 
-### Version Request
-**Host → Device**
-```
-V1: GET_REPORT Feature 0x04, wLength=17
-V2: GET_REPORT Feature 0x05, wLength=32 (compatibility)
-Primary: GET_REPORT Feature 0xA1, wLength=32
-```
+## Main protocol — implemented highlights (`v2.rs`)
 
-**Device → Host Response**
-```
-V1: [0x04, 0x00, 0x00, 0x00, 0x00, "3.00.000", ...]  (17 bytes, offset 5)
-V2: [0x05, 0x0c, 0x31, 0x33, 0x00, "3.00.000", ...]  (32 bytes, offset 5)
-Primary: [0xa1, 0x0c, 0x31, 0x33, 0x00, "3.00.000", ...]  (32 bytes, offset 5)
-```
+- **Input (buttons)**: `[0x01, cmd=0x00, len_lo, len_hi, …key bytes]` (`format_button_report`).
+- **Output `0x02`**: `0x07` key JPEG, `0x08` full LCD, `0x0B` / `0x0C` window (when device supports), `0x0D` background (Classic/XL family).
+- **Feature setter `0x03`**: `0x02` reset, `0x05` fill LCD RGB, `0x06` fill key RGB, `0x08` brightness, `0x0D` sleep seconds, `0x13` show background (XL).
+- **Feature getters**: `0x04`/`0x05`/`0x07` firmware, `0x06` serial, `0x08` unit info (from `Device::unit_information_tail()`), `0x0A` sleep duration.
+- **Helpers** (for future touch/encoder wiring): `V2Handler::format_input_touch_tap`, `V2Handler::format_input_encoder_rotate`.
 
-**Critical:** 32-byte responses are mandatory for 0x05 and 0xA1. 12-byte responses cause "Read FW version: FAILED".
+## Firmware binaries (`src/bin/`)
 
-### Reset Command
-**Host → Device**
-```
-V1 Legacy: SET_REPORT Feature 0x0B, 17 bytes
-Data: [0x0b, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+| Binary | `Device` |
+|--------|----------|
+| `mini`, `revised-mini` | Mini / Mini 2022 |
+| `original`, `original-v2` | Original / Classic 2019 |
+| `mk2` | Mk.2 |
+| `xl`, `plus`, `neo`, `plus-xl` | XL / + / Neo / + XL |
+| `module6`, `module15`, `module32` | Modules |
 
-V1 Reset: SET_REPORT Feature 0x05, 17 bytes
-Data: [0x05, 0x55, 0xAA, 0xD1, 0x01, 0x3e, ...]
-
-V2: SET_REPORT Feature 0x03, 17 bytes
-Data: [0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-```
-
-### Brightness Control
-**Host → Device**
-```
-V1: SET_REPORT Feature 0x05, 17 bytes
-Data: [0x05, 0x55, 0xAA, 0xD1, 0x01, brightness, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-V2: SET_REPORT Feature 0x03, 17 bytes
-Data: [0x03, 0x08, brightness, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-```
-Where `brightness` = 0-100 (percentage)
-
-**Note:** Report ID 0x05 serves dual purposes - GET_REPORT for firmware version and SET_REPORT for brightness/reset commands.
-
-### Serial Number Request
-**Host → Device**
-```
-GET_REPORT Feature 0x03, wLength=32
-```
-
-**Device → Host Response**
-```
-[0x03, 0x0c, 0x31, 0x33, 0x00, "PRODUCTIONDK", ...]  (32 bytes)
-```
-
-**Critical:** 32-byte response required. 12-byte responses cause connection failures.
-
-## Output Report - Image Data
-
-### V2 Protocol (Recommended)
-**Report Structure** (1024 bytes total)
-```
-[0x02, 0x07, key_id, is_last, payload_len_low, payload_len_high, sequence_low, sequence_high, image_data...]
-```
-
-**Field Details:**
-- `0x02` - Report ID (constant)
-- `0x07` - Image command (constant)
-- `key_id` - Button index (0-based)
-- `is_last` - 1 if final packet, 0 otherwise
-- `payload_len` - Little-endian length of image data in this packet
-- `sequence` - Little-endian packet sequence number (starts at 0)
-- `image_data` - JPEG image data (up to 1016 bytes per packet)
-
-### V1 Protocol (Original)
-**Report Structure** (8191 bytes total)
-```
-Packet 1: [0x02, 0x01, 0x01, 0x00, 0x00, key_id, 0x00...0x00, BMP_header, image_data_7749_bytes]
-Packet 2: [0x02, 0x01, 0x02, 0x00, 0x01, key_id, 0x00...0x00, remaining_image_data_7803_bytes]
-```
-
-**BMP Header for V1 Devices** (54 bytes)
-```cpp
-const uint8_t BMP_HEADER_ORIGINAL[54] = {
-    0x42, 0x4d, 0xf6, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00,
-    0x00, 0x00, 0x48, 0x00, 0x00, 0x00, 0x48, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xc0, 0x3c, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
-
-const uint8_t BMP_HEADER_MINI[54] = {
-    0x42, 0x4d, 0xf6, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00,
-    0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xc0, 0x3c, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
-```
-
-## Input Report - Button States
-
-### Report Format
-```
-Device → Host (continuous polling)
-```
-
-**V1 Devices (Original, Mini)**
-```
-[button_0, button_1, button_2, ..., button_n]
-```
-
-**V2 Devices (All others)**
-```
-[0x??, 0x??, 0x??, button_0, button_1, button_2, ..., button_n]
-```
-3-byte header followed by button states
-
-### Button State Values
-- `0x00` - Button released
-- `0x01` - Button pressed
-
-### Button Mapping
-
-**Original StreamDeck** (Right-to-Left mapping)
-```
-Physical Layout:     Data Array Index:
-[01][02][03][04][05]    [05][04][03][02][01]
-[06][07][08][09][10] -> [10][09][08][07][06]
-[11][12][13][14][15]    [15][14][13][12][11]
-```
-
-**All Other Devices** (Left-to-Right mapping)
-```
-Physical Layout:     Data Array Index:
-[01][02][03]           [00][01][02]
-[04][05][06]        -> [03][04][05]
-```
-
-### Device Specifications
-
-| Device | Keys | Image Size | Format | Color Order | Key Layout | Protocol |
-|--------|------|------------|--------|-------------|------------|----------|
-| Original | 15 | 72x72 | BMP | BGR | 5x3 (R→L) | V1 |
-| Mini | 6 | 80x80 | BMP | BGR | 3x2 (L→R) | V1 |
-| Original V2 | 15 | 72x72 | JPEG | RGB | 5x3 (L→R) | V2 |
-| XL | 32 | 96x96 | JPEG | RGB | 8x4 (L→R) | V2 |
-| MK2 | 15 | 72x72 | JPEG | RGB | 5x3 (L→R) | V2 |
-| Revised Mini | 6 | 80x80 | BMP | BGR | 3x2 (L→R) | V1 |
-| Plus | 8 | 120x120 | JPEG | RGB | 4x2 (L→R) | V2 |
-
-## Image Processing Requirements
-
-### V1 Devices (BMP Format)
-1. Expect BMP header (54 bytes) + RGB pixel data
-2. Color order: BGR (swap R and B channels)
-3. Image dimensions must match device specifications
-4. Total data: header + (width × height × 3) bytes
-
-### V2 Devices (JPEG Format)  
-1. Receive JPEG data directly
-2. Color order: RGB (no conversion needed)
-3. Decode JPEG to get pixel data for display
-4. Support progressive JPEG if needed
-
-### Image Transformations
-- **Mini devices**: Rotate image 270° clockwise
-- **Original**: Mirror horizontally (flip Y-axis)
-- **Original V2/XL/MK2**: Mirror both axes
-- **Plus**: No transformation needed
-
-## Implementation Checklist
-
-### Essential USB Functionality
-- [x] Implement correct VID/PID for target device
-- [x] Handle version feature report (0x04/0x05)
-- [x] Handle reset feature report (0x0b/0x03)
-- [x] Handle brightness feature report (0x05/0x03)
-- [x] Process image output reports (0x02)
-- [x] Send button input reports continuously
-
-### Image Processing
-- [x] Parse image headers correctly
-- [x] Reassemble multi-packet images
-- [x] Handle BMP headers for V1 devices
-- [x] Apply device-specific transformations
-- [x] Convert color order (BGR ↔ RGB)
-
-### Hardware Integration
-- [x] Read physical button matrix
-- [x] Display images on individual key LCDs
-- [x] Implement brightness control
-- [x] Handle USB connection/disconnection
-
-This protocol reference provides everything needed to implement a fully compatible StreamDeck USB device that works with official software.
+Use `ProtocolHandler::create_for_device(device)` so V2 unit information and image rules match the selected `Device` (`src/usb.rs`).

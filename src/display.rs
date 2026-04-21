@@ -14,7 +14,7 @@ use heapless::Vec;
 
 use crate::channels::DISPLAY_CHANNEL;
 use crate::config::*;
-use crate::types::DisplayCommand;
+use crate::types::{DisplayCommand, MAX_BUTTON_SLOTS};
 
 // ===================================================================
 // Display Controller Structure
@@ -213,7 +213,6 @@ impl DisplayController {
 
         // Convert RGB888 to RGB565 and send to display
         let pixel_count = image_size * image_size;
-        let mut buffer = [0u8; 2]; // Buffer for one RGB565 pixel
 
         for i in 0..pixel_count {
             let rgb_offset = i * 3;
@@ -221,15 +220,7 @@ impl DisplayController {
                 let r = rgb_data[rgb_offset];
                 let g = rgb_data[rgb_offset + 1];
                 let b = rgb_data[rgb_offset + 2];
-
-                // Convert to RGB565
-                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8)
-                    | ((g as u16 & RGB565_GREEN_MASK) << 3)
-                    | (b as u16 >> RGB565_BLUE_SHIFT);
-
-                // Send as big-endian
-                buffer[0] = (rgb565 >> 8) as u8;
-                buffer[1] = (rgb565 & 0xFF) as u8;
+                let buffer = crate::protocol::image::rgb888_pixel_to_rgb565_be(r, g, b);
                 let _ = self.spi.blocking_write(&buffer);
             }
         }
@@ -428,12 +419,8 @@ pub async fn display_task(
 
     let mut controller = DisplayController::new(spi, cs, dc, rst, bl).await;
 
-    let mut image_buffers: [ImageBuffer; 32] = Default::default(); // Max keys for any device
-
-    // Initialize image buffers
-    for buffer in &mut image_buffers {
-        *buffer = ImageBuffer::new();
-    }
+    let mut image_buffers: [ImageBuffer; MAX_BUTTON_SLOTS] =
+        core::array::from_fn(|_| ImageBuffer::new());
 
     let receiver = DISPLAY_CHANNEL.receiver();
 
@@ -451,8 +438,7 @@ pub async fn display_task(
                 controller.set_brightness(brightness).await;
             }
             DisplayCommand::DisplayImage { key_id, data } => {
-                if key_id < 32 {
-                    // Max keys for any device
+                if (key_id as usize) < MAX_BUTTON_SLOTS {
                     let buffer = &mut image_buffers[key_id as usize];
 
                     match buffer.add_packet(&data) {
@@ -472,6 +458,18 @@ pub async fn display_task(
                 } else {
                     error!("Invalid key_id: {}", key_id);
                 }
+            }
+            DisplayCommand::DisplayFullScreen { data: _ } => {
+                info!("Full-screen image (stub; not rendered on ST7735)");
+            }
+            DisplayCommand::DisplayWindow { data: _ } => {
+                info!("Window strip image (stub)");
+            }
+            DisplayCommand::FillLcd { r, g, b } => {
+                info!("Fill LCD RGB({}, {}, {}) (stub)", r, g, b);
+            }
+            DisplayCommand::FillKey { key_index, r, g, b } => {
+                info!("Fill key {} RGB({}, {}, {}) (stub)", key_index, r, g, b);
             }
         }
     }

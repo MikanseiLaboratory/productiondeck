@@ -4,7 +4,10 @@
 //! Modules per public HID API docs. Image upload parsing is stubbed until we
 //! confirm exact chunk layout from PCAPs.
 
-use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
+use super::{
+    feature_report_clamp, feature_report_zero_prefix, fill_feature_rid_ascii, map_buttons_grid,
+    ButtonMapping, OutputReportResult, ProtocolHandlerTrait,
+};
 use crate::device::ProtocolVersion;
 use crate::protocol::module::{FirmwareType, ModuleGetCommand, ModuleSetCommand};
 
@@ -141,25 +144,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         rows: usize,
         left_to_right: bool,
     ) -> ButtonMapping {
-        let mut mapped = [false; 32];
-
-        for y in 0..rows {
-            for x in 0..cols {
-                let src_index = if left_to_right {
-                    y * cols + x
-                } else {
-                    y * cols + (cols - 1 - x)
-                };
-                let dst_index = y * cols + x;
-                if src_index < physical_buttons.len() && dst_index < 32 {
-                    mapped[dst_index] = physical_buttons[src_index];
-                }
-            }
-        }
-        ButtonMapping {
-            mapped_buttons: mapped,
-            active_count: 6,
-        }
+        map_buttons_grid(physical_buttons, cols, rows, left_to_right)
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
@@ -250,34 +235,22 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
 impl Module6KeysHandler {
     pub fn get_feature_report_bytes(&self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
         let total_len = 32.min(buf.len());
-        buf.iter_mut().take(total_len).for_each(|b| *b = 0);
         if let Some(cmd) = self.parse_module_get_command(report_id) {
             match cmd {
                 ModuleGetCommand::GetFirmwareVersion(ftype) => {
                     let ver = self.get_firmware_version(ftype);
-                    buf[0] = report_id;
-                    // bytes 1..4 are N/A (0), version ASCII at offset 5
-                    let start = 5;
-                    let end = (start + ver.len()).min(total_len);
-                    // bytes 1..4 already zeroed above
-                    if end > start {
-                        buf[start..end].copy_from_slice(&ver[..(end - start)]);
-                    }
-                    return Some(total_len);
+                    fill_feature_rid_ascii(buf, report_id, total_len, 5, ver)
                 }
                 ModuleGetCommand::GetUnitSerialNumber => {
-                    let serial = self.get_unit_serial_number();
-                    buf[0] = 0x03;
-                    let start = 5;
-                    let end = (start + serial.len()).min(total_len);
-                    if end > start {
-                        buf[start..end].copy_from_slice(&serial[..(end - start)]);
-                    }
-                    return Some(total_len);
+                    fill_feature_rid_ascii(buf, 0x03, total_len, 5, self.get_unit_serial_number())
                 }
                 ModuleGetCommand::GetIdleTime => {
+                    let cap = feature_report_clamp(total_len, buf.len());
+                    if cap == 0 {
+                        return None;
+                    }
+                    feature_report_zero_prefix(buf, cap);
                     buf[0] = 0xA3;
-                    // Data length for INT32 duration is 4 bytes
                     buf[1] = 0x04;
                     let secs = crate::config::get_idle_time_seconds();
                     let le = secs.to_le_bytes();
@@ -285,13 +258,12 @@ impl Module6KeysHandler {
                     buf[3] = le[1];
                     buf[4] = le[2];
                     buf[5] = le[3];
-                    return Some(total_len);
+                    Some(cap)
                 }
-                _ => {
-                    return None;
-                }
+                _ => None,
             }
+        } else {
+            None
         }
-        None
     }
 }
