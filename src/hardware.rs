@@ -49,7 +49,9 @@ pub struct LedPins {
 }
 
 impl HardwareConfig {
-    /// Get hardware configuration for a specific device
+    /// Button matrix BCM pin tables (must match [`create_all_pins_for_device`]).
+    ///
+    /// This is the canonical row/column assignment for each layout; do not duplicate in `config`.
     pub fn for_device(device: Device) -> Self {
         let layout = device.button_layout();
 
@@ -63,11 +65,7 @@ impl HardwareConfig {
                 &[4u8, 5, 6, 10, 11, 12, 13, 16, 22][..],
             ), // + XL
             (2, 4) => (&[2u8, 3][..], &[4u8, 5, 6, 10][..]), // Plus / Neo
-            _ => core::panic!(
-                "no pin mapping for matrix {}×{}",
-                layout.cols,
-                layout.rows
-            ),
+            _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
         };
 
         Self {
@@ -298,11 +296,7 @@ fn create_all_pins_for_device(
                 let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_22, Pull::Up));
             }
-            _ => core::panic!(
-                "no pin mapping for matrix {}×{}",
-                layout.cols,
-                layout.rows
-            ),
+            _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
         }
     }
 
@@ -387,11 +381,7 @@ fn spawn_button_task_with_pins(
                         col8,
                     ))
                 }
-                _ => core::panic!(
-                    "no matrix button task for {}×{}",
-                    layout.cols,
-                    layout.rows
-                ),
+                _ => core::panic!("no matrix button task for {}×{}", layout.cols, layout.rows),
             }
         }
         crate::config::ButtonInputMode::Direct => {

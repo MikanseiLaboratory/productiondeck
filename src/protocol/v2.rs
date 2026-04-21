@@ -1,6 +1,9 @@
 //! Stream Deck Main / Expanded protocol (V2) — JPEG image chunks, feature reports per Elgato General Reference.
 
-use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
+use super::{
+    feature_report_clamp, feature_report_zero_prefix, fill_feature_v2_fw_version_report,
+    map_buttons_grid, ButtonMapping, OutputReportResult, ProtocolHandlerTrait,
+};
 use crate::config::{
     IMAGE_COMMAND_V2, IMAGE_PROCESSING_BUFFER_SIZE, OUTPUT_REPORT_IMAGE, V2_COMMAND_BRIGHTNESS,
     V2_COMMAND_RESET,
@@ -18,6 +21,31 @@ enum V2ImageKind {
     Window,
     PartialWindow,
     Background,
+}
+
+/// Parsed 0x0C partial-window image chunk header.
+#[derive(Debug, Clone, Copy)]
+struct PartialWindowChunk {
+    x: u16,
+    y: u16,
+    w: u16,
+    h: u16,
+    is_last: bool,
+    chunk_index: u16,
+    chunk_size: u16,
+    data_start: usize,
+}
+
+/// Arguments for [`V2Handler::ingest_chunk`].
+struct IngestChunkParams<'a> {
+    kind: V2ImageKind,
+    slot: u8,
+    partial: (u16, u16, u16, u16),
+    sequence: u16,
+    is_last: bool,
+    payload_len: usize,
+    data_start: usize,
+    data: &'a [u8],
 }
 
 /// V2 / Main protocol handler (device-specific GET unit info, optional window/background transfers).
@@ -91,7 +119,7 @@ impl V2Handler {
     }
 
     /// Partial window 0x0C
-    fn parse_partial_chunk(data: &[u8]) -> Option<(u16, u16, u16, u16, bool, u16, u16, usize)> {
+    fn parse_partial_chunk(data: &[u8]) -> Option<PartialWindowChunk> {
         if data.len() < 0x11 {
             return None;
         }
@@ -102,20 +130,30 @@ impl V2Handler {
         let is_last = data[9] != 0;
         let chunk_index = u16::from_le_bytes([data[10], data[11]]);
         let chunk_size = u16::from_le_bytes([data[12], data[13]]);
-        Some((x, y, w, h, is_last, chunk_index, chunk_size, 0x10))
+        Some(PartialWindowChunk {
+            x,
+            y,
+            w,
+            h,
+            is_last,
+            chunk_index,
+            chunk_size,
+            data_start: 0x10,
+        })
     }
 
-    fn ingest_chunk(
-        &mut self,
-        kind: V2ImageKind,
-        slot: u8,
-        partial: (u16, u16, u16, u16),
-        sequence: u16,
-        is_last: bool,
-        payload_len: usize,
-        data_start: usize,
-        data: &[u8],
-    ) -> OutputReportResult {
+    fn ingest_chunk(&mut self, p: IngestChunkParams<'_>) -> OutputReportResult {
+        let IngestChunkParams {
+            kind,
+            slot,
+            partial,
+            sequence,
+            is_last,
+            payload_len,
+            data_start,
+            data,
+        } = p;
+
         if sequence == 0 {
             self.reset_transfer();
             self.receiving = true;
@@ -208,16 +246,16 @@ impl ProtocolHandlerTrait for V2Handler {
                 else {
                     return OutputReportResult::Unhandled;
                 };
-                self.ingest_chunk(
-                    V2ImageKind::Key,
-                    key_id,
-                    (0, 0, 0, 0),
-                    seq,
+                self.ingest_chunk(IngestChunkParams {
+                    kind: V2ImageKind::Key,
+                    slot: key_id,
+                    partial: (0, 0, 0, 0),
+                    sequence: seq,
                     is_last,
-                    psize as usize,
-                    start,
-                    payload,
-                )
+                    payload_len: psize as usize,
+                    data_start: start,
+                    data: payload,
+                })
             }
             0x08 => {
                 let Some((_, _res, is_last, psize, seq, start)) =
@@ -225,16 +263,16 @@ impl ProtocolHandlerTrait for V2Handler {
                 else {
                     return OutputReportResult::Unhandled;
                 };
-                self.ingest_chunk(
-                    V2ImageKind::FullScreen,
-                    0,
-                    (0, 0, 0, 0),
-                    seq,
+                self.ingest_chunk(IngestChunkParams {
+                    kind: V2ImageKind::FullScreen,
+                    slot: 0,
+                    partial: (0, 0, 0, 0),
+                    sequence: seq,
                     is_last,
-                    psize as usize,
-                    start,
-                    payload,
-                )
+                    payload_len: psize as usize,
+                    data_start: start,
+                    data: payload,
+                })
             }
             0x0B if self.device.supports_window_image_commands() => {
                 let Some((_, _res, is_last, psize, seq, start)) =
@@ -242,33 +280,41 @@ impl ProtocolHandlerTrait for V2Handler {
                 else {
                     return OutputReportResult::Unhandled;
                 };
-                self.ingest_chunk(
-                    V2ImageKind::Window,
-                    0,
-                    (0, 0, 0, 0),
-                    seq,
+                self.ingest_chunk(IngestChunkParams {
+                    kind: V2ImageKind::Window,
+                    slot: 0,
+                    partial: (0, 0, 0, 0),
+                    sequence: seq,
                     is_last,
-                    psize as usize,
-                    start,
-                    payload,
-                )
+                    payload_len: psize as usize,
+                    data_start: start,
+                    data: payload,
+                })
             }
             0x0C if self.device.supports_window_image_commands() => {
-                let Some((x, y, w, h, is_last, psize, seq, start)) =
-                    Self::parse_partial_chunk(payload)
+                let Some(PartialWindowChunk {
+                    x,
+                    y,
+                    w,
+                    h,
+                    is_last,
+                    chunk_index,
+                    chunk_size,
+                    data_start: start,
+                }) = Self::parse_partial_chunk(payload)
                 else {
                     return OutputReportResult::Unhandled;
                 };
-                self.ingest_chunk(
-                    V2ImageKind::PartialWindow,
-                    0,
-                    (x, y, w, h),
-                    seq,
+                self.ingest_chunk(IngestChunkParams {
+                    kind: V2ImageKind::PartialWindow,
+                    slot: 0,
+                    partial: (x, y, w, h),
+                    sequence: chunk_index,
                     is_last,
-                    psize as usize,
-                    start,
-                    payload,
-                )
+                    payload_len: chunk_size as usize,
+                    data_start: start,
+                    data: payload,
+                })
             }
             0x0D if self.device.supports_background_feature() => {
                 let Some((bg_index, is_last, seq, psize, start)) =
@@ -276,16 +322,16 @@ impl ProtocolHandlerTrait for V2Handler {
                 else {
                     return OutputReportResult::Unhandled;
                 };
-                self.ingest_chunk(
-                    V2ImageKind::Background,
-                    bg_index,
-                    (0, 0, 0, 0),
-                    seq,
+                self.ingest_chunk(IngestChunkParams {
+                    kind: V2ImageKind::Background,
+                    slot: bg_index,
+                    partial: (0, 0, 0, 0),
+                    sequence: seq,
                     is_last,
-                    psize as usize,
-                    start,
-                    payload,
-                )
+                    payload_len: psize as usize,
+                    data_start: start,
+                    data: payload,
+                })
             }
             0x09 => OutputReportResult::BootLogoImageChunk,
             _ => OutputReportResult::Unhandled,
@@ -299,28 +345,7 @@ impl ProtocolHandlerTrait for V2Handler {
         rows: usize,
         left_to_right: bool,
     ) -> ButtonMapping {
-        let mut mapped_buttons = [false; MAX_BUTTON_SLOTS];
-        let total_keys = cols.saturating_mul(rows).min(MAX_BUTTON_SLOTS);
-
-        for (physical_idx, &pressed) in physical_buttons.iter().take(total_keys).enumerate() {
-            let mapped_idx = if left_to_right {
-                physical_idx
-            } else {
-                let row = physical_idx / cols;
-                let col = physical_idx % cols;
-                let reversed_col = cols.saturating_sub(1).saturating_sub(col);
-                row * cols + reversed_col
-            };
-
-            if mapped_idx < MAX_BUTTON_SLOTS {
-                mapped_buttons[mapped_idx] = pressed;
-            }
-        }
-
-        ButtonMapping {
-            mapped_buttons,
-            active_count: total_keys,
-        }
+        map_buttons_grid(physical_buttons, cols, rows, left_to_right)
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
@@ -402,50 +427,51 @@ impl ProtocolHandlerTrait for V2Handler {
     }
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
+        const FW_VER: &[u8] = b"3.00.000";
         let total_len = 32.min(buf.len());
-        let ver = b"3.00.000";
-        let fill_fw = |buf: &mut [u8], rid: u8| {
-            buf.iter_mut().take(total_len).for_each(|b| *b = 0);
-            buf[0] = rid;
-            buf[1] = 0x0c;
-            buf[2..6].copy_from_slice(&[0, 0, 0, 0]);
-            let start = 6;
-            let end = (start + ver.len()).min(total_len);
-            buf[start..end].copy_from_slice(&ver[..end - start]);
-        };
-
         match report_id {
             0x04 | 0x05 | 0x07 => {
-                fill_fw(buf, report_id);
-                Some(total_len)
+                fill_feature_v2_fw_version_report(buf, report_id, total_len, FW_VER)
             }
             0x06 => {
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
+                let cap = feature_report_clamp(total_len, buf.len());
+                if cap == 0 {
+                    return None;
+                }
+                feature_report_zero_prefix(buf, cap);
                 buf[0] = 0x06;
                 let serial = crate::config::USB_SERIAL.as_bytes();
                 let dl = core::cmp::min(serial.len(), 14) as u8;
                 buf[1] = dl;
-                let start = 2;
-                let end = (start + dl as usize).min(total_len);
+                let start = 2usize;
+                let end = (start + dl as usize).min(cap);
                 buf[start..end].copy_from_slice(&serial[..(end - start)]);
-                Some(total_len)
+                Some(cap)
             }
             0x08 => {
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
+                let cap = feature_report_clamp(total_len, buf.len());
+                if cap == 0 {
+                    return None;
+                }
+                feature_report_zero_prefix(buf, cap);
                 buf[0] = 0x08;
                 let tail = self.device.unit_information_tail();
-                let copy = core::cmp::min(tail.len(), total_len.saturating_sub(1));
+                let copy = core::cmp::min(tail.len(), cap.saturating_sub(1));
                 buf[1..1 + copy].copy_from_slice(&tail[..copy]);
-                Some(total_len)
+                Some(cap)
             }
             0x0A => {
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
+                let cap = feature_report_clamp(total_len, buf.len());
+                if cap == 0 {
+                    return None;
+                }
+                feature_report_zero_prefix(buf, cap);
                 buf[0] = 0x0A;
                 buf[1] = 0x04;
                 let seconds = crate::config::get_idle_time_seconds();
                 let le = seconds.to_le_bytes();
                 buf[2..6].copy_from_slice(&le);
-                Some(total_len)
+                Some(cap)
             }
             _ => None,
         }

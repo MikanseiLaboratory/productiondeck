@@ -7,13 +7,8 @@
 //! - **Legacy / Mini family**: Mini, Mini 2022, Mini Discord, 6-key Module — distinct report layout.
 //! - **Main / Expanded family**: Classic, XL, Neo, Plus, Plus XL, 15/32-key Modules — see General Reference.
 
-pub mod mini;
 pub mod neo;
-pub mod original;
-pub mod original_v2;
-pub mod plus;
 pub mod plus_xl;
-pub mod xl;
 
 /// Image format supported by StreamDeck devices
 #[derive(Debug, Clone, Copy, PartialEq, defmt::Format)]

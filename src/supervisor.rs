@@ -25,6 +25,11 @@ impl AppSupervisor {
         }
     }
 
+    /// Selected build [`Device`] (same as passed to [`Self::new_for_device`]).
+    pub fn device(&self) -> Device {
+        self.device
+    }
+
     /// Print application startup banner with device information
     pub fn print_startup_banner(&self) {
         let device = self.device;

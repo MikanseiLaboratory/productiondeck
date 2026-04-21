@@ -213,7 +213,6 @@ impl DisplayController {
 
         // Convert RGB888 to RGB565 and send to display
         let pixel_count = image_size * image_size;
-        let mut buffer = [0u8; 2]; // Buffer for one RGB565 pixel
 
         for i in 0..pixel_count {
             let rgb_offset = i * 3;
@@ -221,15 +220,7 @@ impl DisplayController {
                 let r = rgb_data[rgb_offset];
                 let g = rgb_data[rgb_offset + 1];
                 let b = rgb_data[rgb_offset + 2];
-
-                // Convert to RGB565
-                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8)
-                    | ((g as u16 & RGB565_GREEN_MASK) << 3)
-                    | (b as u16 >> RGB565_BLUE_SHIFT);
-
-                // Send as big-endian
-                buffer[0] = (rgb565 >> 8) as u8;
-                buffer[1] = (rgb565 & 0xFF) as u8;
+                let buffer = crate::protocol::image::rgb888_pixel_to_rgb565_be(r, g, b);
                 let _ = self.spi.blocking_write(&buffer);
             }
         }

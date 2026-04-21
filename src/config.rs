@@ -54,22 +54,6 @@ pub fn button_input_mode() -> ButtonInputMode {
 // USB Configuration - Dynamic based on current device
 // ===================================================================
 
-pub fn usb_vid() -> u16 {
-    get_current_device().usb_config().vid
-}
-
-pub fn usb_pid() -> u16 {
-    get_current_device().usb_config().pid
-}
-
-pub fn usb_manufacturer() -> &'static str {
-    get_current_device().usb_config().manufacturer
-}
-
-pub fn usb_product() -> &'static str {
-    get_current_device().usb_config().product_name
-}
-
 /// Serial number (static for all devices)
 pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
 
@@ -97,65 +81,12 @@ pub fn key_image_size() -> usize {
     display.image_width // Assume square images
 }
 
-pub fn key_image_bytes() -> usize {
-    let display = get_current_device().display_config();
-    display.image_width * display.image_height * 3 // RGB
-}
-
-// ===================================================================
-// USB HID Configuration - Dynamic based on current device
-// ===================================================================
-
-pub fn hid_report_size_input() -> usize {
-    get_current_device().input_report_size()
-}
-
-pub fn hid_report_size_feature() -> usize {
-    get_current_device().feature_report_size()
-}
-
-pub fn hid_report_size_output() -> usize {
-    get_current_device().output_report_size()
-}
-
 // ===================================================================
 // GPIO Pin Assignments - Raspberry Pi Pico
 // ===================================================================
-
-// Button Matrix - Dynamic sizing based on device
-pub fn btn_row_pins() -> &'static [u8] {
-    let rows = streamdeck_rows();
-    match rows {
-        2 => &[2, 3],       // Mini: 2 rows
-        3 => &[2, 3, 7],    // Original: 3 rows
-        4 => &[2, 3, 7, 9], // XL: 4 rows
-        _ => &[2, 3],       // Fallback to 2 rows
-    }
-}
-
-pub fn btn_col_pins() -> &'static [u8] {
-    let cols = streamdeck_cols();
-    match cols {
-        3 => &[4, 5, 6],                         // Mini: 3 cols
-        4 => &[4, 5, 6, 10],                     // Plus: 4 cols
-        5 => &[4, 5, 6, 10, 11],                 // Original: 5 cols
-        8 => &[4, 5, 6, 10, 11, 12, 13, 16],     // XL: 8 cols
-        9 => &[4, 5, 6, 10, 11, 12, 13, 16, 22], // + XL: 9 cols (22 = spare GPIO; verify wiring)
-        _ => &[4, 5, 6],                         // Fallback to 3 cols
-    }
-}
-
-/// Direct input pin assignments (one GPIO per button)
-/// For Mini (6 keys), use six dedicated pins.
-pub fn btn_direct_pins() -> &'static [u8] {
-    let keys = streamdeck_keys();
-    match keys {
-        // StreamDeck Mini and Revised Mini (6 keys)
-        6 => &[4, 5, 6, 10, 11, 12],
-        // Fallback: re-use column pins (may not cover all keys)
-        _ => btn_col_pins(),
-    }
-}
+//
+// Button matrix row/column BCM numbers live in [`crate::hardware::HardwareConfig::for_device`]
+// together with [`crate::hardware::create_all_pins_for_device`] (single source of truth).
 
 // SPI Display Interface
 pub const SPI_MOSI_PIN: u8 = 19; // Data to display

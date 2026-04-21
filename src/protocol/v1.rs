@@ -2,7 +2,11 @@
 //!
 //! Handles Original, Mini, and Revised Mini devices using BMP format
 
-use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
+use super::{
+    feature_report_clamp, feature_report_zero_prefix, fill_feature_rid_ascii,
+    fill_feature_v1_fw_string_report, map_buttons_grid, ButtonMapping, OutputReportResult,
+    ProtocolHandlerTrait,
+};
 use crate::config::{
     FEATURE_REPORT_BRIGHTNESS_V1, IMAGE_PROCESSING_BUFFER_SIZE, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
     STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
@@ -115,31 +119,7 @@ impl ProtocolHandlerTrait for V1Handler {
         rows: usize,
         left_to_right: bool,
     ) -> ButtonMapping {
-        let mut mapped_buttons = [false; crate::types::MAX_BUTTON_SLOTS];
-        let total_keys = cols
-            .saturating_mul(rows)
-            .min(crate::types::MAX_BUTTON_SLOTS);
-
-        for (physical_idx, &pressed) in physical_buttons.iter().take(total_keys).enumerate() {
-            let mapped_idx = if left_to_right {
-                physical_idx // Direct mapping for Mini and Revised Mini
-            } else {
-                // Right-to-left mapping for Original StreamDeck
-                let row = physical_idx / cols;
-                let col = physical_idx % cols;
-                let reversed_col = cols.saturating_sub(1).saturating_sub(col);
-                row * cols + reversed_col
-            };
-
-            if mapped_idx < crate::types::MAX_BUTTON_SLOTS {
-                mapped_buttons[mapped_idx] = pressed;
-            }
-        }
-
-        ButtonMapping {
-            mapped_buttons,
-            active_count: total_keys,
-        }
+        map_buttons_grid(physical_buttons, cols, rows, left_to_right)
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
@@ -292,62 +272,23 @@ impl ProtocolHandlerTrait for V1Handler {
     }
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
+        const FW_VER: &[u8] = b"3.00.000";
         match report_id {
-            0xA0..=0xA2 => {
-                let total_len = 32.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
-                buf[0] = report_id;
-                buf[1] = 0x0c; // Length
-                buf[2] = 0x31; // Type
-                buf[3] = 0x33; // Type
-                buf[4] = 0x00; // Null terminator
-                let version = b"3.00.000";
-                let start = 5;
-                let end = (start + version.len()).min(total_len);
-                buf[start..end].copy_from_slice(&version[..(end - start)]);
-                Some(total_len)
-            }
-            0x03 => {
-                let total_len = 32.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
-                buf[0] = report_id;
-                buf[1] = 0x0c; // Length
-                buf[2] = 0x31; // Type
-                buf[3] = 0x33; // Type
-                buf[4] = 0x00; // Null terminator
-                let serial = crate::config::USB_SERIAL.as_bytes();
-                let start = 5;
-                let end = (start + serial.len()).min(total_len);
-                buf[start..end].copy_from_slice(&serial[..(end - start)]);
-                Some(total_len)
-            }
-            0x04 => {
-                let total_len = 17.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
-                buf[0] = report_id;
-                let version = b"3.00.000";
-                let start = 5;
-                let end = (start + version.len()).min(total_len);
-                buf[start..end].copy_from_slice(&version[..(end - start)]);
-                Some(total_len)
-            }
-            0x05 => {
-                let total_len = 32.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
-                buf[0] = report_id;
-                buf[1] = 0x0c; // Length
-                buf[2] = 0x31; // Type
-                buf[3] = 0x33; // Type
-                buf[4] = 0x00; // Null terminator
-                let version = b"3.00.000";
-                let start = 5;
-                let end = (start + version.len()).min(total_len);
-                buf[start..end].copy_from_slice(&version[..(end - start)]);
-                Some(total_len)
-            }
+            0xA0..=0xA2 => fill_feature_v1_fw_string_report(buf, report_id, 32, FW_VER),
+            0x03 => fill_feature_v1_fw_string_report(
+                buf,
+                report_id,
+                32,
+                crate::config::USB_SERIAL.as_bytes(),
+            ),
+            0x04 => fill_feature_rid_ascii(buf, report_id, 17, 5, FW_VER),
+            0x05 => fill_feature_v1_fw_string_report(buf, report_id, 32, FW_VER),
             crate::config::FEATURE_REPORT_GET_IDLE_TIME => {
-                let total_len = 32.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
+                let cap = feature_report_clamp(32, buf.len());
+                if cap == 0 {
+                    return None;
+                }
+                feature_report_zero_prefix(buf, cap);
                 buf[0] = report_id;
                 buf[1] = 0x06;
                 let seconds = crate::config::get_idle_time_seconds();
@@ -356,13 +297,16 @@ impl ProtocolHandlerTrait for V1Handler {
                 buf[3] = secs_le[1];
                 buf[4] = secs_le[2];
                 buf[5] = secs_le[3];
-                Some(total_len)
+                Some(cap)
             }
             0x07 => {
-                let total_len = 16.min(buf.len());
-                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
+                let cap = feature_report_clamp(16, buf.len());
+                if cap == 0 {
+                    return None;
+                }
+                feature_report_zero_prefix(buf, cap);
                 buf[0] = report_id;
-                Some(total_len)
+                Some(cap)
             }
             _ => None,
         }

@@ -20,6 +20,59 @@ use embassy_usb::class::hid::{
 use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config};
 
+type UsbCommandSender = embassy_sync::channel::Sender<
+    'static,
+    embassy_sync::blocking_mutex::raw::ThreadModeRawMutex,
+    UsbCommand,
+    4,
+>;
+
+/// Send assembled output-report payloads to the USB command channel (shared by HID paths).
+fn dispatch_output_report_result(result: OutputReportResult, sender: &UsbCommandSender) {
+    match result {
+        OutputReportResult::KeyImageComplete { key_id, image } => {
+            info!("Image complete for key {} ({} bytes)", key_id, image.len());
+            let _ = sender.try_send(UsbCommand::ImageData {
+                key_id,
+                data: image,
+            });
+        }
+        OutputReportResult::FullScreenImageComplete { image } => {
+            let _ = sender.try_send(UsbCommand::FullScreenImage { data: image });
+        }
+        OutputReportResult::WindowImageComplete { image } => {
+            let _ = sender.try_send(UsbCommand::WindowImage { data: image });
+        }
+        OutputReportResult::PartialWindowImageComplete {
+            x,
+            y,
+            width,
+            height,
+            image,
+        } => {
+            let _ = sender.try_send(UsbCommand::PartialWindowImage {
+                x,
+                y,
+                width,
+                height,
+                data: image,
+            });
+        }
+        OutputReportResult::BackgroundImageComplete { index, image } => {
+            let _ = sender.try_send(UsbCommand::BackgroundImage { index, data: image });
+        }
+        OutputReportResult::FullScreenImageChunk => {
+            debug!("Full screen image chunk received (not assembled)");
+        }
+        OutputReportResult::BootLogoImageChunk => {
+            debug!("Boot logo image chunk received (not assembled)");
+        }
+        OutputReportResult::Unhandled => {
+            debug!("Unhandled output report");
+        }
+    }
+}
+
 // ===================================================================
 // USB Configuration
 // ===================================================================
@@ -151,56 +204,10 @@ impl StreamDeckHidHandler {
             );
         }
 
-        match self.protocol_handler.parse_output_report(data) {
-            OutputReportResult::KeyImageComplete { key_id, image } => {
-                info!("Image complete for key {} ({} bytes)", key_id, image.len());
-                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData {
-                    key_id,
-                    data: image,
-                });
-            }
-            OutputReportResult::FullScreenImageComplete { image } => {
-                let _ = self
-                    .usb_command_sender
-                    .try_send(UsbCommand::FullScreenImage { data: image });
-            }
-            OutputReportResult::WindowImageComplete { image } => {
-                let _ = self
-                    .usb_command_sender
-                    .try_send(UsbCommand::WindowImage { data: image });
-            }
-            OutputReportResult::PartialWindowImageComplete {
-                x,
-                y,
-                width,
-                height,
-                image,
-            } => {
-                let _ = self
-                    .usb_command_sender
-                    .try_send(UsbCommand::PartialWindowImage {
-                        x,
-                        y,
-                        width,
-                        height,
-                        data: image,
-                    });
-            }
-            OutputReportResult::BackgroundImageComplete { index, image } => {
-                let _ = self
-                    .usb_command_sender
-                    .try_send(UsbCommand::BackgroundImage { index, data: image });
-            }
-            OutputReportResult::FullScreenImageChunk => {
-                debug!("Full screen image chunk received (not assembled)");
-            }
-            OutputReportResult::BootLogoImageChunk => {
-                debug!("Boot logo image chunk received (not assembled)");
-            }
-            OutputReportResult::Unhandled => {
-                debug!("Unhandled output report");
-            }
-        }
+        dispatch_output_report_result(
+            self.protocol_handler.parse_output_report(data),
+            &self.usb_command_sender,
+        );
     }
 }
 
@@ -428,53 +435,8 @@ async fn usb_task_impl(
                     Ok(n) => {
                         let data = &out_buf[..n];
                         if !data.is_empty() {
-                            match out_protocol.parse_output_report(data) {
-                                OutputReportResult::KeyImageComplete { key_id, image } => {
-                                    let img_len = image.len();
-                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
-                                        UsbCommand::ImageData {
-                                            key_id,
-                                            data: image,
-                                        },
-                                    );
-                                    info!("Image complete for key {} ({} bytes)", key_id, img_len);
-                                }
-                                OutputReportResult::FullScreenImageComplete { image } => {
-                                    let _ = USB_COMMAND_CHANNEL
-                                        .sender()
-                                        .try_send(UsbCommand::FullScreenImage { data: image });
-                                }
-                                OutputReportResult::WindowImageComplete { image } => {
-                                    let _ = USB_COMMAND_CHANNEL
-                                        .sender()
-                                        .try_send(UsbCommand::WindowImage { data: image });
-                                }
-                                OutputReportResult::PartialWindowImageComplete {
-                                    x,
-                                    y,
-                                    width,
-                                    height,
-                                    image,
-                                } => {
-                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
-                                        UsbCommand::PartialWindowImage {
-                                            x,
-                                            y,
-                                            width,
-                                            height,
-                                            data: image,
-                                        },
-                                    );
-                                }
-                                OutputReportResult::BackgroundImageComplete { index, image } => {
-                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
-                                        UsbCommand::BackgroundImage { index, data: image },
-                                    );
-                                }
-                                OutputReportResult::FullScreenImageChunk => {}
-                                OutputReportResult::BootLogoImageChunk => {}
-                                OutputReportResult::Unhandled => {}
-                            }
+                            let result = out_protocol.parse_output_report(data);
+                            dispatch_output_report_result(result, &USB_COMMAND_CHANNEL.sender());
                         }
                     }
                     Err(e) => {
