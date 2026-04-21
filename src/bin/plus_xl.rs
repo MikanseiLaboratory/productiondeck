@@ -1,4 +1,4 @@
-//! ProductionDeck — Stream Deck + XL (PID `0x0084`), 9×4 layout.
+//! ProductionDeck — Stream Deck + XL (PID `0x00C6`), 9×4 layout.
 
 #![no_std]
 #![no_main]

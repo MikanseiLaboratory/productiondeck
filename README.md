@@ -24,11 +24,9 @@ UF2 files: `target/thumbv6m-none-eabi/release/<device-name>.uf2`
 1. Hold BOOTSEL button, connect USB, release BOOTSEL
 2. Copy `.uf2` file to `RPI-RP2` drive
 
-## Hardware
+## Documents
 
-- **Raspberry Pi Pico** (RP2040)
-- **TFT Display** (SPI)
-- **6x Tactile Switches**
+- https://docs.elgato.com/streamdeck/hid/intro
 
 
 ## License

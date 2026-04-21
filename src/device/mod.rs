@@ -152,7 +152,7 @@ pub enum Device {
     Xl2022 = 8,
     /// Stream Deck + (0x0084)
     Plus = 9,
-    /// Stream Deck + XL — same USB PID as + per Elgato HID summary table; layout differs (9×4).
+    /// Stream Deck + XL (0x00C6); layout differs from + (9×4).
     PlusXl = 10,
     Neo = 11,
     Module6Keys = 12,
@@ -200,7 +200,8 @@ impl Device {
             Device::Mk2ScissorKeys => 0x00A5,
             Device::Xl => 0x006c,
             Device::Xl2022 => 0x008F,
-            Device::Plus | Device::PlusXl => 0x0084,
+            Device::Plus => 0x0084,
+            Device::PlusXl => 0x00C6,
             Device::Neo => 0x009A,
             Device::Module6Keys => 0x00B8,
             Device::Module15Keys => 0x00B9,
@@ -449,7 +450,7 @@ impl DeviceConfig for Device {
             },
             Device::PlusXl => UsbConfig {
                 vid: 0x0fd9,
-                pid: 0x0084,
+                pid: 0x00C6,
                 product_name: "Stream Deck + XL",
                 manufacturer: "Elgato Systems",
                 protocol: ProtocolVersion::V2,
