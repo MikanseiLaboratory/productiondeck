@@ -116,7 +116,7 @@ pub async fn init_hardware_tasks_core0(
         create_all_pins_for_device(p, hw_config.device);
 
     // Spawn USB task
-    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
+    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device)?);
 
     // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
     if matches!(
@@ -132,7 +132,7 @@ pub async fn init_hardware_tasks_core0(
     spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
 
     // Spawn status LED task
-    spawner.spawn(status_task(status_led, error_led))?;
+    spawner.spawn(status_task(status_led, error_led)?);
 
     Ok(())
 }
@@ -172,7 +172,7 @@ async fn init_hardware_tasks_with_config(
         create_all_pins_for_device(p, hw_config.device);
 
     // Spawn USB task
-    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
+    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device)?);
 
     // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
     let device = hw_config.device;
@@ -192,7 +192,7 @@ async fn init_hardware_tasks_with_config(
     // spawn_display_task(spawner, p, &hw_config)?;
 
     // Spawn status LED task
-    spawner.spawn(status_task(status_led, error_led))?;
+    spawner.spawn(status_task(status_led, error_led)?);
 
     Ok(())
 }
@@ -321,7 +321,8 @@ fn spawn_button_task_with_pins(
                     let col2 = col_pins.pop().unwrap();
                     let col1 = col_pins.pop().unwrap();
                     let col0 = col_pins.pop().unwrap();
-                    spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2))
+                    spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2)?);
+                    Ok(())
                 }
                 (2, 4) => {
                     let row1 = row_pins.pop().unwrap();
@@ -330,7 +331,8 @@ fn spawn_button_task_with_pins(
                     let col2 = col_pins.pop().unwrap();
                     let col1 = col_pins.pop().unwrap();
                     let col0 = col_pins.pop().unwrap();
-                    spawner.spawn(button_task_matrix_4x2(row0, row1, col0, col1, col2, col3))
+                    spawner.spawn(button_task_matrix_4x2(row0, row1, col0, col1, col2, col3)?);
+                    Ok(())
                 }
                 (3, 5) => {
                     let row2 = row_pins.pop().unwrap();
@@ -343,7 +345,8 @@ fn spawn_button_task_with_pins(
                     let col0 = col_pins.pop().unwrap();
                     spawner.spawn(button_task_matrix_5x3(
                         row0, row1, row2, col0, col1, col2, col3, col4,
-                    ))
+                    )?);
+                    Ok(())
                 }
                 (4, 8) => {
                     let row3 = row_pins.pop().unwrap();
@@ -360,7 +363,8 @@ fn spawn_button_task_with_pins(
                     let col0 = col_pins.pop().unwrap();
                     spawner.spawn(button_task_matrix_8x4(
                         row0, row1, row2, row3, col0, col1, col2, col3, col4, col5, col6, col7,
-                    ))
+                    )?);
+                    Ok(())
                 }
                 (4, 9) => {
                     let row3 = row_pins.pop().unwrap();
@@ -379,7 +383,8 @@ fn spawn_button_task_with_pins(
                     spawner.spawn(button_task_matrix_9x4(
                         row0, row1, row2, row3, col0, col1, col2, col3, col4, col5, col6, col7,
                         col8,
-                    ))
+                    )?);
+                    Ok(())
                 }
                 _ => core::panic!("no matrix button task for {}×{}", layout.cols, layout.rows),
             }
@@ -400,7 +405,8 @@ fn spawn_button_task_with_pins(
                     let _ = inputs.pop();
                 }
             }
-            spawner.spawn(button_task_direct(inputs))
+            spawner.spawn(button_task_direct(inputs)?);
+            Ok(())
         }
     }
 }

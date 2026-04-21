@@ -11,13 +11,13 @@ name = "productiondeck"
 path = "src/lib.rs"
 
 [dependencies]
-# Embassy framework for RP2040 - latest versions
-embassy-rp = { version = "0.7", features = ["defmt", "unstable-pac", "time-driver", "rp2040", "critical-section-impl"] }
-embassy-usb = { version = "0.5", features = ["defmt"] }
-embassy-time = { version = "0.4", features = ["defmt", "defmt-timestamp-uptime"] }
-embassy-executor = { version = "0.8", features = ["defmt", "arch-cortex-m", "executor-thread", "executor-interrupt"] }
+# Embassy framework for RP2040
+embassy-rp = { version = "0.10", features = ["defmt", "unstable-pac", "time-driver", "rp2040", "critical-section-impl"] }
+embassy-usb = { version = "0.6", features = ["defmt"] }
+embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread", "executor-interrupt"] }
 embassy-futures = "0.1"
-embassy-sync = "0.7"
+embassy-sync = "0.8"
 
 # Cortex-M runtime
 cortex-m = "0.7"
@@ -27,7 +27,7 @@ critical-section = "1.0"
 # Hardware abstraction
 embedded-hal = "1.0"
 embedded-hal-async = "1.0"
-embedded-hal-bus = { version = "0.2", features = ["async"] }
+embedded-hal-bus = { version = "0.3", features = ["async"] }
 portable-atomic = { version = "1.0", features = ["critical-section"] }
 
 # Display and graphics
@@ -35,20 +35,20 @@ st7735-lcd = "0.10"
 embedded-graphics = "0.8"
 
 # USB HID
-usbd-hid = "0.8"
+usbd-hid = "0.10"
 
 # Utilities
-heapless = { version = "0.8", default-features = false }
+heapless = { version = "0.9", default-features = false }
 nb = "1.1"
-panic-halt = "0.2"
+panic-halt = "1.0"
 defmt = "1.0.1"
-defmt-rtt = "1.0.0"
-fixed = "1.24"
-static_cell = "1.0"
+defmt-rtt = "1.1"
+fixed = "1.31"
+static_cell = "2.1"
 
 # Development dependencies
 [dev-dependencies]
-defmt-test = "0.3"
+defmt-test = "0.4"
 
 # Cargo build configuration
 [profile.release]
