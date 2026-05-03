@@ -2,8 +2,8 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig, RUNTIME_DEVICE_TAG_UNINIT};
-use core::sync::atomic::{AtomicI32, AtomicPtr, AtomicU8, Ordering};
 use core::ptr;
+use core::sync::atomic::{AtomicI32, AtomicPtr, AtomicU8, Ordering};
 use defmt::warn;
 use embassy_rp::flash::{Blocking, Flash};
 use embassy_rp::peripherals::FLASH;
