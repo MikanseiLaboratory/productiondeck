@@ -104,7 +104,7 @@ impl Module6KeysHandler {
     }
 
     fn get_unit_serial_number(&self) -> &'static [u8] {
-        b"1234567890"
+        crate::config::usb_serial_bytes()
     }
 }
 

@@ -440,7 +440,7 @@ impl ProtocolHandlerTrait for V2Handler {
                 }
                 feature_report_zero_prefix(buf, cap);
                 buf[0] = 0x06;
-                let serial = crate::config::USB_SERIAL.as_bytes();
+                let serial = crate::config::usb_serial_bytes();
                 let dl = core::cmp::min(serial.len(), 14) as u8;
                 buf[1] = dl;
                 let start = 2usize;

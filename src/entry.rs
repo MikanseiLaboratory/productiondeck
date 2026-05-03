@@ -97,6 +97,7 @@ pub fn run_multicore(
 ) -> ! {
     let p = embassy_rp::init(Default::default());
     config::init_runtime_device(device);
+    config::init_usb_serial_from_flash(p.FLASH);
 
     let supervisor = AppSupervisor::new_for_device(device);
     supervisor.print_startup_banner();
