@@ -4,7 +4,7 @@
 //! using Embassy async framework on RP2040.
 //!
 //! ## Supported Devices
-//! - StreamDeck Mini (6 keys, 80x80px)
+//! - StreamDeck Mini 2022 / Mini Discord / Module 6 Keys (6 keys, 80×80px BMP family)
 //! - StreamDeck Original (15 keys, 72x72px)
 //! - StreamDeck Original V2 (15 keys, 72x72px, JPEG)
 //! - StreamDeck XL (32 keys, 96x96px, JPEG)
@@ -21,6 +21,15 @@
 use embassy_rp::usb::InterruptHandler;
 use embassy_rp::{bind_interrupts, peripherals};
 
+#[cfg(feature = "display")]
+bind_interrupts!(pub struct DisplayDmaIrqs {
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<peripherals::DMA_CH0>,
+        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH1>,
+        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH2>,
+        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH3>,
+        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH4>;
+});
+
 // Export all modules for use by device-specific binaries
 pub mod buttons;
 pub mod channels;
@@ -33,6 +42,11 @@ pub mod protocol;
 pub mod supervisor;
 pub mod types;
 pub mod usb;
+
+#[cfg(feature = "display")]
+pub mod display_spi_dma;
+#[cfg(feature = "display")]
+pub mod display_module6_st7789;
 
 // USB interrupt binding - shared by all binaries
 bind_interrupts!(pub struct Irqs {

@@ -21,11 +21,13 @@ use embassy_usb::class::hid::{
 use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config};
 
+use crate::config::USB_COMMAND_CHANNEL_SIZE;
+
 type UsbCommandSender = embassy_sync::channel::Sender<
     'static,
     embassy_sync::blocking_mutex::raw::ThreadModeRawMutex,
     UsbCommand,
-    4,
+    USB_COMMAND_CHANNEL_SIZE,
 >;
 
 /// Send assembled output-report payloads to the USB command channel (shared by HID paths).
@@ -74,6 +76,17 @@ fn dispatch_output_report_result(result: OutputReportResult, sender: &UsbCommand
     }
 }
 
+async fn dispatch_display_command(device: Device, cmd: DisplayCommand) {
+    if matches!(device, Device::Module6Keys) {
+        let _ = crate::channels::MULTICORE_IMAGE_CHANNEL
+            .sender()
+            .send(cmd)
+            .await;
+    } else {
+        let _ = DISPLAY_CHANNEL.sender().send(cmd).await;
+    }
+}
+
 // ===================================================================
 // USB Configuration
 // ===================================================================
@@ -103,12 +116,7 @@ fn create_usb_config_for_device(device: Device) -> Config<'static> {
 
 struct StreamDeckHidHandler {
     protocol_handler: ProtocolHandler,
-    usb_command_sender: embassy_sync::channel::Sender<
-        'static,
-        embassy_sync::blocking_mutex::raw::ThreadModeRawMutex,
-        UsbCommand,
-        4,
-    >,
+    usb_command_sender: UsbCommandSender,
 }
 
 impl StreamDeckHidHandler {
@@ -308,16 +316,11 @@ async fn usb_task_impl(
             match receiver.receive().await {
                 UsbCommand::Reset => {
                     info!("Processing reset command");
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::ClearAll)
-                        .await;
+                    dispatch_display_command(device, DisplayCommand::ClearAll).await;
                 }
                 UsbCommand::SetBrightness(brightness) => {
                     info!("Processing brightness command: {}%", brightness);
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::SetBrightness(brightness))
+                    dispatch_display_command(device, DisplayCommand::SetBrightness(brightness))
                         .await;
                 }
                 UsbCommand::ImageData { key_id, data } => {
@@ -326,22 +329,18 @@ async fn usb_task_impl(
                         key_id,
                         data.len()
                     );
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::DisplayImage { key_id, data })
-                        .await;
+                    dispatch_display_command(
+                        device,
+                        DisplayCommand::DisplayImage { key_id, data },
+                    )
+                    .await;
                 }
                 UsbCommand::FullScreenImage { data } => {
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::DisplayFullScreen { data })
+                    dispatch_display_command(device, DisplayCommand::DisplayFullScreen { data })
                         .await;
                 }
                 UsbCommand::WindowImage { data } => {
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::DisplayWindow { data })
-                        .await;
+                    dispatch_display_command(device, DisplayCommand::DisplayWindow { data }).await;
                 }
                 UsbCommand::PartialWindowImage {
                     x,
@@ -363,16 +362,16 @@ async fn usb_task_impl(
                     debug!("Background {} ({} bytes)", index, data.len());
                 }
                 UsbCommand::FillLcdColor { r, g, b } => {
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::FillLcd { r, g, b })
-                        .await;
+                    dispatch_display_command(device, DisplayCommand::FillLcd { r, g, b }).await;
                 }
                 UsbCommand::FillKeyColor { key_index, r, g, b } => {
-                    let _ = DISPLAY_CHANNEL
-                        .sender()
-                        .send(DisplayCommand::FillKey { key_index, r, g, b })
-                        .await;
+                    dispatch_display_command(device, DisplayCommand::FillKey {
+                        key_index,
+                        r,
+                        g,
+                        b,
+                    })
+                    .await;
                 }
                 UsbCommand::ShowBackgroundByIndex { index } => {
                     debug!("Show background index {}", index);

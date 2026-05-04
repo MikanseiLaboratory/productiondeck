@@ -12,7 +12,7 @@ cargo install elf2uf2-rs flip-link
 ## Building
 
 ```bash
-cargo build --release --bin mini
+cargo build --release --bin module6
 ```
 
 Other devices: `original`, `xl`, `plus`, `module6`, etc.

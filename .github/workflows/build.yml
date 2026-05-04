@@ -66,7 +66,7 @@ jobs:
     - name: Verify embedded binaries exist
       run: |
         set -euo pipefail
-        expected=(mini module6 module15 module32 original original-v2 plus revised-mini xl)
+        expected=(module6 module15 module32 original original-v2 plus revised-mini xl)
         missing=0
         for bin in "${expected[@]}"; do
           if [ -f "target/thumbv6m-none-eabi/release/$bin" ]; then
@@ -89,7 +89,6 @@ jobs:
       with:
         name: firmware-${{ github.sha }}
         path: |
-          target/thumbv6m-none-eabi/release/mini
           target/thumbv6m-none-eabi/release/module6
           target/thumbv6m-none-eabi/release/module15
           target/thumbv6m-none-eabi/release/module32

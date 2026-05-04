@@ -121,8 +121,7 @@ pub async fn init_hardware_tasks_core0(
     // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
     if matches!(
         device,
-        crate::device::Device::Mini
-            | crate::device::Device::RevisedMini
+        crate::device::Device::RevisedMini
             | crate::device::Device::MiniDiscord
     ) {
         crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
@@ -178,8 +177,7 @@ async fn init_hardware_tasks_with_config(
     let device = hw_config.device;
     if matches!(
         device,
-        crate::device::Device::Mini
-            | crate::device::Device::RevisedMini
+        crate::device::Device::RevisedMini
             | crate::device::Device::MiniDiscord
     ) {
         crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
@@ -250,7 +248,7 @@ fn create_all_pins_for_device(
         crate::config::ButtonInputMode::Direct
     ) && matches!(
         device,
-        Device::Mini | Device::RevisedMini | Device::MiniDiscord
+        Device::RevisedMini | Device::MiniDiscord
     ) {
         // Build six dedicated direct-input pins for Mini to avoid partial-move issues
         let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
@@ -422,7 +420,7 @@ fn spawn_button_task_with_pins(
             // Ensure Mini has exactly 6 inputs if possible
             if matches!(
                 device,
-                Device::Mini | Device::RevisedMini | Device::MiniDiscord
+                Device::RevisedMini | Device::MiniDiscord
             ) && inputs.len() > 6
             {
                 while inputs.len() > 6 {

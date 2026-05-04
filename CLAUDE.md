@@ -50,7 +50,7 @@ cargo doc --open
 ## Project Structure
 
 ### Core Source Files
-- `src/bin/*.rs` - One binary per target device (`mini`, `xl`, `mk2`, `neo`, `plus-xl`, …)
+- `src/bin/*.rs` - One binary per target device (`module6`, `revised-mini`, `xl`, `mk2`, `neo`, `plus-xl`, …)
 - `src/lib.rs` - Library root (`productiondeck` crate)
 - `src/config.rs` - Hardware configuration constants and pin assignments
 - `src/device/mod.rs` - USB PID, layout, and protocol family per `Device`

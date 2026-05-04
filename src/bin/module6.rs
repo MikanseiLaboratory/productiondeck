@@ -16,7 +16,7 @@ const DEVICE: Device = Device::Module6Keys;
 fn main() -> ! {
     run_multicore(
         DEVICE,
-        MulticoreCore0Layout::MiniOrModule6Direct,
+        MulticoreCore0Layout::Module6DirectTc00,
         MulticoreCore1Buffer::B8192,
     )
 }
