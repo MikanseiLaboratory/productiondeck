@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-ProductionDeck is an open-source RP2040-based Stream Deck–compatible firmware in Rust (Embassy). Multiple **device profiles** (Mini, Classic/Mk.2, XL, Neo, +, modules, etc.) share the same codebase; each profile selects USB PID, layout, and **Legacy (Mini)** vs **Main/Expanded** HID handling. Physical hardware is often a small key matrix + one ST7735 region unless you build a larger layout.
+ProductionDeck is an open-source RP2040-based Stream Deck–compatible firmware in Rust (Embassy). Multiple **device profiles** (Classic/Mk.2, XL, Neo, +, modules, etc.) share the same codebase; each profile selects USB PID, layout, and **Legacy (Mini-family)** vs **Main/Expanded** HID handling. Six-key Mini-class hardware is covered only by **`module6`** ([`Device::Module6Keys`]). Physical hardware is often a small key matrix + one ST7735 region unless you build a larger layout.
 
 **Current Status**: Alpha - Firmware compiles successfully, ready for hardware testing.
 
@@ -50,7 +50,7 @@ cargo doc --open
 ## Project Structure
 
 ### Core Source Files
-- `src/bin/*.rs` - One binary per target device (`module6`, `revised-mini`, `xl`, `mk2`, `neo`, `plus-xl`, …)
+- `src/bin/*.rs` - One binary per target device (`module6`, `xl`, `mk2`, `neo`, `plus-xl`, …)
 - `src/lib.rs` - Library root (`productiondeck` crate)
 - `src/config.rs` - Hardware configuration constants and pin assignments
 - `src/device/mod.rs` - USB PID, layout, and protocol family per `Device`

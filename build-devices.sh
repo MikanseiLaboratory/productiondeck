@@ -7,7 +7,7 @@ echo "=== ProductionDeck Multi-Device Build Script ==="
 echo
 
 # List of devices to build
-devices=("revised-mini" "original" "original-v2" "xl" "plus")
+devices=("original" "original-v2" "xl" "plus")
 
 echo "Available device targets:"
 for device in "${devices[@]}"; do
@@ -45,7 +45,7 @@ else
     echo "All builds completed!"
     echo
     echo "Usage examples:"
-    echo "  cargo run --release --bin revised-mini  # Run Mini 2022 firmware"
+    echo "  cargo run --release --bin module6       # Module 6 / Mini-family firmware"
     echo "  cargo run --release --bin xl            # Run XL firmware"
-    echo "  ./build-devices.sh revised-mini         # Build only Mini 2022 firmware"
+    echo "  ./build-devices.sh module6              # Build only Module 6 firmware"
 fi

@@ -66,7 +66,7 @@ jobs:
     - name: Verify embedded binaries exist
       run: |
         set -euo pipefail
-        expected=(module6 module15 module32 original original-v2 plus revised-mini xl)
+        expected=(module6 module15 module32 original original-v2 plus xl)
         missing=0
         for bin in "${expected[@]}"; do
           if [ -f "target/thumbv6m-none-eabi/release/$bin" ]; then
@@ -95,7 +95,6 @@ jobs:
           target/thumbv6m-none-eabi/release/original
           target/thumbv6m-none-eabi/release/original-v2
           target/thumbv6m-none-eabi/release/plus
-          target/thumbv6m-none-eabi/release/revised-mini
           target/thumbv6m-none-eabi/release/xl
         retention-days: 30
 

@@ -18,11 +18,8 @@ pub static USB_COMMAND_CHANNEL: Channel<ThreadModeRawMutex, UsbCommand, USB_COMM
     Channel::new();
 
 /// Channel for display commands to the display task
-pub static DISPLAY_CHANNEL: Channel<
-    ThreadModeRawMutex,
-    DisplayCommand,
-    DISPLAY_CHANNEL_CAPACITY,
-> = Channel::new();
+pub static DISPLAY_CHANNEL: Channel<ThreadModeRawMutex, DisplayCommand, DISPLAY_CHANNEL_CAPACITY> =
+    Channel::new();
 
 /// Core 0 → Core 1 display commands (multicore builds). Uses [`MULTICORE_CHANNEL_SIZE`] slots.
 pub static MULTICORE_IMAGE_CHANNEL: Channel<

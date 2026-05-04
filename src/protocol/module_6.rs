@@ -43,7 +43,7 @@ impl Module6KeysHandler {
             return None;
         }
         let bf_size = u32::from_le_bytes(buf[2..6].try_into().ok()?) as usize;
-        if bf_size > MODULE6_BMP_CAP || bf_size < 54 {
+        if !(54..=MODULE6_BMP_CAP).contains(&bf_size) {
             return None;
         }
         Some(bf_size)

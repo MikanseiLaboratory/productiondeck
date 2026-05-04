@@ -74,7 +74,7 @@ pub enum MulticoreCore0Layout {
 /// Core 1 image buffer size for the display stub loop.
 #[derive(Clone, Copy)]
 pub enum MulticoreCore1Buffer {
-    /// 8 KiB (Mini, Module 6, Module 15).
+    /// 8 KiB (`module6` stub path, Module 15).
     B8192,
     /// 16 KiB (Module 32).
     B16384,
@@ -138,12 +138,10 @@ fn run_multicore_module6_tc00_display(device: Device, _core1_buf: MulticoreCore1
             let bl = Output::new(PIN_28, Level::High);
 
             executor1.run(|spawner| {
-                unwrap!(
-                    crate::display_module6_st7789::module6_st7789_core1_task(
-                        device, spi, cs, dc, rst, bl,
-                    )
-                    .map(|t| spawner.spawn(t))
-                );
+                unwrap!(crate::display_module6_st7789::module6_st7789_core1_task(
+                    device, spi, cs, dc, rst, bl,
+                )
+                .map(|t| spawner.spawn(t)));
             });
         },
     );
@@ -151,34 +149,28 @@ fn run_multicore_module6_tc00_display(device: Device, _core1_buf: MulticoreCore1
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
         unwrap!(multicore_core0_supervisor_task(supervisor).map(|t| spawner.spawn(t)));
-        unwrap!(
-            usb::usb_task_for_device(
-                Driver::new(USB, crate::Irqs),
-                Output::new(PIN_20, Level::Low),
-                device,
-            )
-            .map(|t| spawner.spawn(t))
-        );
-        unwrap!(
-            buttons::button_task_direct({
-                let mut inputs = heapless::Vec::new();
-                let _ = inputs.push(Input::new(PIN_1, Pull::Up));
-                let _ = inputs.push(Input::new(PIN_2, Pull::Up));
-                let _ = inputs.push(Input::new(PIN_3, Pull::Up));
-                let _ = inputs.push(Input::new(PIN_4, Pull::Up));
-                let _ = inputs.push(Input::new(PIN_9, Pull::Up));
-                let _ = inputs.push(Input::new(PIN_10, Pull::Up));
-                inputs
-            })
-            .map(|t| spawner.spawn(t))
-        );
-        unwrap!(
-            hardware::status_task(
-                Output::new(PIN_25, Level::Low),
-                Output::new(PIN_21, Level::Low),
-            )
-            .map(|t| spawner.spawn(t))
-        );
+        unwrap!(usb::usb_task_for_device(
+            Driver::new(USB, crate::Irqs),
+            Output::new(PIN_20, Level::Low),
+            device,
+        )
+        .map(|t| spawner.spawn(t)));
+        unwrap!(buttons::button_task_direct({
+            let mut inputs = heapless::Vec::new();
+            let _ = inputs.push(Input::new(PIN_1, Pull::Up));
+            let _ = inputs.push(Input::new(PIN_2, Pull::Up));
+            let _ = inputs.push(Input::new(PIN_3, Pull::Up));
+            let _ = inputs.push(Input::new(PIN_4, Pull::Up));
+            let _ = inputs.push(Input::new(PIN_9, Pull::Up));
+            let _ = inputs.push(Input::new(PIN_10, Pull::Up));
+            inputs
+        })
+        .map(|t| spawner.spawn(t)));
+        unwrap!(hardware::status_task(
+            Output::new(PIN_25, Level::Low),
+            Output::new(PIN_21, Level::Low),
+        )
+        .map(|t| spawner.spawn(t)));
     });
 
     loop {

@@ -26,7 +26,12 @@ static FLAG_WAKER_VTABLE: RawWakerVTable =
     RawWakerVTable::new(waker_clone, waker_wake, waker_wake_by_ref, waker_drop);
 
 fn waker_flag(flag: &AtomicBool) -> Waker {
-    unsafe { Waker::from_raw(RawWaker::new(flag as *const _ as *const (), &FLAG_WAKER_VTABLE)) }
+    unsafe {
+        Waker::from_raw(RawWaker::new(
+            flag as *const _ as *const (),
+            &FLAG_WAKER_VTABLE,
+        ))
+    }
 }
 
 fn block_on_dma_write<T: Instance>(

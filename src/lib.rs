@@ -4,7 +4,7 @@
 //! using Embassy async framework on RP2040.
 //!
 //! ## Supported Devices
-//! - StreamDeck Mini 2022 / Mini Discord / Module 6 Keys (6 keys, 80×80px BMP family)
+//! - StreamDeck Module 6 Keys (6 keys, 80×80px BMP / Mini-family HID; `--bin module6`)
 //! - StreamDeck Original (15 keys, 72x72px)
 //! - StreamDeck Original V2 (15 keys, 72x72px, JPEG)
 //! - StreamDeck XL (32 keys, 96x96px, JPEG)
@@ -44,9 +44,9 @@ pub mod types;
 pub mod usb;
 
 #[cfg(feature = "display")]
-pub mod display_spi_dma;
-#[cfg(feature = "display")]
 pub mod display_module6_st7789;
+#[cfg(feature = "display")]
+pub mod display_spi_dma;
 
 // USB interrupt binding - shared by all binaries
 bind_interrupts!(pub struct Irqs {

@@ -57,7 +57,7 @@ impl HardwareConfig {
 
         // Get pin assignments based on device layout
         let (row_pins, col_pins) = match (layout.rows, layout.cols) {
-            (2, 3) => (&[2u8, 3][..], &[4u8, 5, 6][..]), // Mini
+            (2, 3) => (&[2u8, 3][..], &[4u8, 5, 6][..]), // 2×3 six-key matrix
             (3, 5) => (&[2u8, 3, 7][..], &[4u8, 5, 6, 10, 11][..]), // Original
             (4, 8) => (&[2u8, 3, 7, 9][..], &[4u8, 5, 6, 10, 11, 12, 13, 16][..]), // XL
             (4, 9) => (
@@ -118,15 +118,6 @@ pub async fn init_hardware_tasks_core0(
     // Spawn USB task
     spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device)?);
 
-    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
-    if matches!(
-        device,
-        crate::device::Device::RevisedMini
-            | crate::device::Device::MiniDiscord
-    ) {
-        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
-    }
-
     // Spawn button task with device-specific layout
     spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
 
@@ -173,15 +164,7 @@ async fn init_hardware_tasks_with_config(
     // Spawn USB task
     spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device)?);
 
-    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
     let device = hw_config.device;
-    if matches!(
-        device,
-        crate::device::Device::RevisedMini
-            | crate::device::Device::MiniDiscord
-    ) {
-        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
-    }
 
     // Spawn button task with device-specific layout
     spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
@@ -242,84 +225,68 @@ fn create_all_pins_for_device(
     let mut row_pins: Vec<Output<'static>, 4> = Vec::new();
     let mut col_pins: Vec<Input<'static>, 32> = Vec::new();
 
-    // If Direct mode is selected for Mini, build 6 direct input pins
-    if matches!(
-        crate::config::button_input_mode(),
-        crate::config::ButtonInputMode::Direct
-    ) && matches!(
-        device,
-        Device::RevisedMini | Device::MiniDiscord
-    ) {
-        // Build six dedicated direct-input pins for Mini to avoid partial-move issues
-        let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-        let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-        let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-        let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
-        let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
-        let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
-    } else {
-        match (layout.rows, layout.cols) {
-            (2, 3) => {
-                // Mini and Revised Mini (2x3 = 6 keys)
-                let _ = row_pins.push(Output::new(PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(PIN_3, Level::High));
-                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-            }
-            (2, 4) => {
-                // Stream Deck + / Neo (4x2 keys)
-                let _ = row_pins.push(Output::new(PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(PIN_3, Level::High));
-                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
-            }
-            (3, 5) => {
-                // 15 Keys Module (5x3)
-                let _ = row_pins.push(Output::new(PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(PIN_7, Level::High));
-                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
-            }
-            (4, 8) => {
-                // 32 Keys Module (8x4)
-                let _ = row_pins.push(Output::new(PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(PIN_7, Level::High));
-                let _ = row_pins.push(Output::new(PIN_9, Level::High));
-                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
-            }
-            (4, 9) => {
-                // Stream Deck + XL (9x4)
-                let _ = row_pins.push(Output::new(PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(PIN_7, Level::High));
-                let _ = row_pins.push(Output::new(PIN_9, Level::High));
-                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
-                let _ = col_pins.push(Input::new(PIN_22, Pull::Up));
-            }
-            _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
+    // Matrix pin assignments by layout (`module6` uses multicore wiring in `entry`, not here).
+    match (layout.rows, layout.cols) {
+        (2, 3) => {
+            // 2×3 matrix (six keys)
+            let _ = row_pins.push(Output::new(PIN_2, Level::High));
+            let _ = row_pins.push(Output::new(PIN_3, Level::High));
+            let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
         }
+        (2, 4) => {
+            // Stream Deck + / Neo (4x2 keys)
+            let _ = row_pins.push(Output::new(PIN_2, Level::High));
+            let _ = row_pins.push(Output::new(PIN_3, Level::High));
+            let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+        }
+        (3, 5) => {
+            // 15 Keys Module (5x3)
+            let _ = row_pins.push(Output::new(PIN_2, Level::High));
+            let _ = row_pins.push(Output::new(PIN_3, Level::High));
+            let _ = row_pins.push(Output::new(PIN_7, Level::High));
+            let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+        }
+        (4, 8) => {
+            // 32 Keys Module (8x4)
+            let _ = row_pins.push(Output::new(PIN_2, Level::High));
+            let _ = row_pins.push(Output::new(PIN_3, Level::High));
+            let _ = row_pins.push(Output::new(PIN_7, Level::High));
+            let _ = row_pins.push(Output::new(PIN_9, Level::High));
+            let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
+        }
+        (4, 9) => {
+            // Stream Deck + XL (9x4)
+            let _ = row_pins.push(Output::new(PIN_2, Level::High));
+            let _ = row_pins.push(Output::new(PIN_3, Level::High));
+            let _ = row_pins.push(Output::new(PIN_7, Level::High));
+            let _ = row_pins.push(Output::new(PIN_9, Level::High));
+            let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
+            let _ = col_pins.push(Input::new(PIN_22, Pull::Up));
+        }
+        _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
     }
 
     (driver, usb_led, status_led, error_led, row_pins, col_pins)
@@ -416,16 +383,6 @@ fn spawn_button_task_with_pins(
             let mut inputs: heapless::Vec<Input<'static>, 32> = heapless::Vec::new();
             while let Some(pin) = col_pins.pop() {
                 let _ = inputs.push(pin);
-            }
-            // Ensure Mini has exactly 6 inputs if possible
-            if matches!(
-                device,
-                Device::RevisedMini | Device::MiniDiscord
-            ) && inputs.len() > 6
-            {
-                while inputs.len() > 6 {
-                    let _ = inputs.pop();
-                }
             }
             spawner.spawn(button_task_direct(inputs)?);
             Ok(())

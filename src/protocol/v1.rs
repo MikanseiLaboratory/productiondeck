@@ -1,6 +1,6 @@
 //! StreamDeck V1 Protocol Handler
 //!
-//! Handles Original, Mini, and Revised Mini devices using BMP format
+//! Handles Original (classic V1) devices using BMP format.
 
 use super::{
     feature_report_clamp, feature_report_zero_prefix, fill_feature_rid_ascii,

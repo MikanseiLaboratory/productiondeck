@@ -4,7 +4,7 @@
 //! abstracting away device-specific configurations, protocols, and capabilities.
 //!
 //! Protocol families (Elgato HID API):
-//! - **Legacy / Mini family**: Mini 2022, Mini Discord, 6-key Module — distinct report layout.
+//! - **Mini / 6-key Module**: [`Device::Module6Keys`] only (Mini-family HID); use `--bin module6`.
 //! - **Main / Expanded family**: Classic, XL, Neo, Plus, Plus XL, 15/32-key Modules — see General Reference.
 
 pub mod neo;
@@ -134,10 +134,7 @@ pub trait DeviceConfig {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Device {
-    /// Mini 2022 (Elgato PID 0x0090). Runtime tag `0` was the removed Mini firmware and is unused.
-    RevisedMini = 1,
-    /// Mini Discord (0x00B3)
-    MiniDiscord = 2,
+    /// Runtime tags `0`…`2` are unused (removed Mini-family firmware SKUs).
     /// First-gen Stream Deck (0x0060)
     Original = 3,
     /// Stream Deck 2019 (0x006D)
@@ -169,8 +166,6 @@ impl Device {
             return None;
         }
         match tag {
-            1 => Some(Device::RevisedMini),
-            2 => Some(Device::MiniDiscord),
             3 => Some(Device::Original),
             4 => Some(Device::OriginalV2),
             5 => Some(Device::Mk2),
@@ -189,8 +184,6 @@ impl Device {
 
     pub fn pid(&self) -> u16 {
         match self {
-            Device::RevisedMini => 0x0090,
-            Device::MiniDiscord => 0x00B3,
             Device::Original => 0x0060,
             Device::OriginalV2 => 0x006d,
             Device::Mk2 => 0x0080,
@@ -218,9 +211,7 @@ impl Device {
             Device::Plus => (2u8, 4u8, 120u16, 120u16, 800u16, 480u16),
             Device::PlusXl => (4u8, 9u8, 112u16, 112u16, 1280u16, 800u16),
             Device::Neo => (2u8, 4u8, 96u16, 96u16, 480u16, 320u16),
-            Device::RevisedMini | Device::MiniDiscord | Device::Module6Keys => {
-                (2u8, 3u8, 80u16, 80u16, 320u16, 240u16)
-            }
+            Device::Module6Keys => (2u8, 3u8, 80u16, 80u16, 320u16, 240u16),
             Device::Original => (3u8, 5u8, 72u16, 72u16, 480u16, 272u16),
         };
         let mut b = [0u8; 16];
@@ -268,8 +259,6 @@ impl Device {
 impl DeviceConfig for Device {
     fn device_name(&self) -> &'static str {
         match self {
-            Device::RevisedMini => "StreamDeck Mini 2022",
-            Device::MiniDiscord => "StreamDeck Mini Discord",
             Device::Original => "StreamDeck Original",
             Device::OriginalV2 => "StreamDeck Classic (2019)",
             Device::Mk2 => "StreamDeck Mk.2",
@@ -294,9 +283,7 @@ impl DeviceConfig for Device {
 
     fn button_layout(&self) -> ButtonLayout {
         match self {
-            Device::RevisedMini | Device::MiniDiscord | Device::Module6Keys => {
-                ButtonLayout::new(3, 2, true)
-            }
+            Device::Module6Keys => ButtonLayout::new(3, 2, true),
             Device::Module15Keys | Device::OriginalV2 | Device::Mk2 | Device::Mk2ScissorKeys => {
                 ButtonLayout::new(5, 3, true)
             }
@@ -309,16 +296,14 @@ impl DeviceConfig for Device {
 
     fn display_config(&self) -> DisplayConfig {
         match self {
-            Device::RevisedMini | Device::MiniDiscord | Device::Module6Keys => {
-                DisplayConfig {
-                    image_width: 80,
-                    image_height: 80,
-                    format: ImageFormat::Bmp,
-                    needs_rotation: true,
-                    flip_horizontal: false,
-                    flip_vertical: false,
-                }
-            }
+            Device::Module6Keys => DisplayConfig {
+                image_width: 80,
+                image_height: 80,
+                format: ImageFormat::Bmp,
+                needs_rotation: true,
+                flip_horizontal: false,
+                flip_vertical: false,
+            },
             Device::Module15Keys | Device::OriginalV2 | Device::Mk2 | Device::Mk2ScissorKeys => {
                 DisplayConfig {
                     image_width: 72,
@@ -374,20 +359,6 @@ impl DeviceConfig for Device {
 
     fn usb_config(&self) -> UsbConfig {
         match self {
-            Device::RevisedMini => UsbConfig {
-                vid: 0x0fd9,
-                pid: 0x0090,
-                product_name: "Stream Deck Mini",
-                manufacturer: "Elgato Systems",
-                protocol: ProtocolVersion::V1,
-            },
-            Device::MiniDiscord => UsbConfig {
-                vid: 0x0fd9,
-                pid: 0x00B3,
-                product_name: "Stream Deck Mini",
-                manufacturer: "Elgato Systems",
-                protocol: ProtocolVersion::V1,
-            },
             Device::Original => UsbConfig {
                 vid: 0x0fd9,
                 pid: 0x0060,

@@ -71,12 +71,6 @@ incremental = false
 opt-level = "z"
 
 [[bin]]
-name = "revised-mini"
-path = "src/bin/revised_mini.rs"
-test = false
-bench = false
-
-[[bin]]
 name = "original"
 path = "src/bin/original.rs"
 test = false

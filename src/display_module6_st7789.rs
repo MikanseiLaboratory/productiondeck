@@ -76,9 +76,8 @@ fn key_origin_px(key_id: u8) -> (i32, i32) {
 }
 
 fn fill_rect(display: &mut Module6Display, x: i32, y: i32, w: u32, h: u32, c: Rgb565) {
-    let rect = Rectangle::new(Point::new(x, y), Size::new(w, h)).into_styled(
-        PrimitiveStyleBuilder::new().fill_color(c).build(),
-    );
+    let rect = Rectangle::new(Point::new(x, y), Size::new(w, h))
+        .into_styled(PrimitiveStyleBuilder::new().fill_color(c).build());
     let _ = rect.draw(display);
 }
 
@@ -148,12 +147,7 @@ fn handle_display_cmd(
             let c = Rgb565::from(Rgb888::new(r, g, b));
             fill_rect(display, 0, 0, 240, 320, c);
         }
-        DisplayCommand::FillKey {
-            key_index,
-            r,
-            g,
-            b,
-        } => {
+        DisplayCommand::FillKey { key_index, r, g, b } => {
             let c = Rgb565::from(Rgb888::new(r, g, b));
             let (x, y) = key_origin_px(key_index);
             fill_rect(display, x, y, 80, 80, c);

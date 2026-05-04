@@ -329,11 +329,8 @@ async fn usb_task_impl(
                         key_id,
                         data.len()
                     );
-                    dispatch_display_command(
-                        device,
-                        DisplayCommand::DisplayImage { key_id, data },
-                    )
-                    .await;
+                    dispatch_display_command(device, DisplayCommand::DisplayImage { key_id, data })
+                        .await;
                 }
                 UsbCommand::FullScreenImage { data } => {
                     dispatch_display_command(device, DisplayCommand::DisplayFullScreen { data })
@@ -365,12 +362,10 @@ async fn usb_task_impl(
                     dispatch_display_command(device, DisplayCommand::FillLcd { r, g, b }).await;
                 }
                 UsbCommand::FillKeyColor { key_index, r, g, b } => {
-                    dispatch_display_command(device, DisplayCommand::FillKey {
-                        key_index,
-                        r,
-                        g,
-                        b,
-                    })
+                    dispatch_display_command(
+                        device,
+                        DisplayCommand::FillKey { key_index, r, g, b },
+                    )
                     .await;
                 }
                 UsbCommand::ShowBackgroundByIndex { index } => {
