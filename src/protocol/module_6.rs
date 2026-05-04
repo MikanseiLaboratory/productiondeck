@@ -1,52 +1,22 @@
-//! StreamDeck Module HID Protocol Handler (6 keys)
+//! StreamDeck Module HID Protocol Handler (6keys)
 //!
-//! Legacy Mini-family protocol per Elgato docs:
-//! https://docs.elgato.com/streamdeck/hid/mini
+//! Implements the unified `ProtocolHandlerTrait` for the Elgato Stream Deck
+//! Modules per public HID API docs. Image upload parsing is stubbed until we
+//! confirm exact chunk layout from PCAPs.
 
 use super::{
     feature_report_clamp, feature_report_zero_prefix, fill_feature_rid_ascii, map_buttons_grid,
     ButtonMapping, OutputReportResult, ProtocolHandlerTrait,
 };
-use crate::config::MODULE6_BMP_CAP;
 use crate::device::ProtocolVersion;
 use crate::protocol::module::{FirmwareType, ModuleGetCommand, ModuleSetCommand};
-use heapless::Vec;
 
 #[derive(Debug)]
-pub struct Module6KeysHandler {
-    image_buffer: Vec<u8, MODULE6_BMP_CAP>,
-    receiving: bool,
-    expected_key: u8,
-}
+pub struct Module6KeysHandler {}
 
 impl Module6KeysHandler {
     pub fn new() -> Self {
-        Self {
-            image_buffer: Vec::new(),
-            receiving: false,
-            expected_key: 0,
-        }
-    }
-
-    fn reset_rx(&mut self) {
-        self.image_buffer.clear();
-        self.receiving = false;
-        self.expected_key = 0;
-    }
-
-    /// BMP file size from `bfSize` once `BM` magic is present.
-    fn bmp_total_bytes(buf: &[u8]) -> Option<usize> {
-        if buf.len() < 6 {
-            return None;
-        }
-        if buf[0] != b'B' || buf[1] != b'M' {
-            return None;
-        }
-        let bf_size = u32::from_le_bytes(buf[2..6].try_into().ok()?) as usize;
-        if !(54..=MODULE6_BMP_CAP).contains(&bf_size) {
-            return None;
-        }
-        Some(bf_size)
+        Self {}
     }
 }
 
@@ -55,11 +25,12 @@ impl Default for Module6KeysHandler {
         Self::new()
     }
 }
-
 impl Module6KeysHandler {
     fn parse_module_set_command(&self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match report_id {
             0x05 => {
+                // Payload excludes Report ID. Per spec:
+                // [Command=0x55, 0xAA, 0xD1, 0x01, Brightness]
                 if data.len() >= 5
                     && data[0] == 0x55
                     && data[1] == 0xAA
@@ -72,9 +43,12 @@ impl Module6KeysHandler {
                 }
             }
             0x0B => {
+                // Payload excludes Report ID.
+                // Commands at data[0]
                 if !data.is_empty() {
                     match data[0] {
                         0x63 => {
+                            // data[1]: 0x00 Show Logo, 0x02 Update Boot Logo
                             if data.len() >= 2 {
                                 match data[1] {
                                     0x00 => Some(ModuleSetCommand::ShowLogo),
@@ -89,6 +63,7 @@ impl Module6KeysHandler {
                             }
                         }
                         0xA2 => {
+                            // data[1..=4]: i32 seconds (LE)
                             if data.len() >= 5 {
                                 let secs = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
                                 Some(ModuleSetCommand::SetIdleTime { seconds: secs })
@@ -113,7 +88,7 @@ impl Module6KeysHandler {
             0xA2 => Some(ModuleGetCommand::GetFirmwareVersion(FirmwareType::AP1)),
             0x03 => Some(ModuleGetCommand::GetUnitSerialNumber),
             0xA3 => Some(ModuleGetCommand::GetIdleTime),
-            0x08 => Some(ModuleGetCommand::GetUnitInformation),
+            0x08 => Some(ModuleGetCommand::GetUnitInformation), // Module 6 compatibility
             _ => None,
         }
     }
@@ -139,55 +114,26 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
-        // Upload Data to Image Memory Bank — Report ID 0x02, Command 0x01.
-        // Layout: [0]=RID 0x02, [1]=Cmd 0x01, [2]=chunk idx, [3]=0x00, [4]=show flag,
-        //          [5]=key idx, [6..0x10]=reserved, [0x10..]=payload.
-        if data.len() < 17 {
-            return OutputReportResult::Unhandled;
-        }
-        if data[0] != 0x02 || data[1] != 0x01 {
-            return OutputReportResult::Unhandled;
-        }
+        let report_id = data[0];
+        let command = data[1];
 
-        let chunk_idx = data[2];
-        let key_idx = data[5];
-        let chunk_payload = data.get(0x10..).unwrap_or(&[]);
+        match report_id {
+            // https://docs.elgato.com/streamdeck/hid/module-6#upload-data-to-image-memory-bank
+            0x02 => {
+                if command == 0x01 {
+                    let _chunk_index = data[2];
+                    let _reserved = data[3];
+                    let _show_image_flag = data[4];
+                    let _key_index = data[5];
+                    let _reserved = &data[6..0x10];
+                    let _chunk_data = &data[0x10..];
 
-        if chunk_idx == 0 {
-            self.reset_rx();
-            self.receiving = true;
-            self.expected_key = key_idx;
-        } else if !self.receiving || key_idx != self.expected_key {
-            self.reset_rx();
-            return OutputReportResult::Unhandled;
-        }
-
-        if self.image_buffer.extend_from_slice(chunk_payload).is_err() {
-            self.reset_rx();
-            return OutputReportResult::Unhandled;
-        }
-
-        let Some(total) = Self::bmp_total_bytes(&self.image_buffer) else {
-            return OutputReportResult::Unhandled;
-        };
-
-        if self.image_buffer.len() < total {
-            return OutputReportResult::Unhandled;
-        }
-
-        let mut image = Vec::new();
-        let slice = self.image_buffer.as_slice().get(..total).unwrap_or(&[]);
-        if image.extend_from_slice(slice).is_err() {
-            self.reset_rx();
-            return OutputReportResult::Unhandled;
-        }
-
-        let completed_key = self.expected_key;
-        self.reset_rx();
-
-        OutputReportResult::KeyImageComplete {
-            key_id: completed_key,
-            image,
+                    OutputReportResult::Unhandled
+                } else {
+                    OutputReportResult::Unhandled
+                }
+            }
+            _ => OutputReportResult::Unhandled,
         }
     }
 
@@ -202,6 +148,8 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
+        // Minimal descriptor covering Input(0x01), Output(0x02), Feature(0x03/0x04/0x05/0x07/0x08/0x0B/0xA0/0xA1/0xA2/0xA3)
+        // This can be fine-tuned to match exact real devices if needed.
         const DESC: &[u8] = &[
             0x05, 0x0C, // Usage Page (Consumer)
             0x09, 0x01, // Usage (Consumer Control)
@@ -214,7 +162,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
             0x15, 0x00, //   Logical Minimum (0)
             0x26, 0xFF, 0x00, //   Logical Maximum (255)
             0x75, 0x08, //   Report Size (8)
-            0x95, 0x3F, //   Report Count (63)
+            0x95, 0x3F, //   Report Count (63) -> total 64 bytes incl. Report ID
             0x81, 0x02, //   Input (Data,Var,Abs)
             // Output report 0x02 (image/data chunks)
             0x85, 0x02, //   Report ID 0x02
@@ -236,7 +184,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
             0x85, 0xA1, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10,
             0xB1, 0x04, 0x85, 0xA2, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08,
             0x95, 0x10, 0xB1, 0x04, 0x85, 0xA3, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00,
-            0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0xC0,
+            0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0xC0, // End Collection
         ];
         DESC
     }
@@ -246,19 +194,23 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
+        // 64 bytes total per packet: Report ID (1) + 63 data bytes
         const MAX_USB_SIZE: usize = 64;
 
         if report.len() < MAX_USB_SIZE {
             return 0;
         }
 
+        // Set Report ID
         report[0] = 0x01;
 
+        // Map up to 63 data bytes; Module 6 needs first 6
         let button_count = core::cmp::min(6, buttons.mapped_buttons.len());
         for i in 0..button_count {
             report[1 + i] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
 
+        // Zero out remaining bytes in the USB packet
         report
             .iter_mut()
             .take(MAX_USB_SIZE)
@@ -269,7 +221,10 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
-        self.parse_module_set_command(report_id, data)
+        if let Some(cmd) = self.parse_module_set_command(report_id, data) {
+            return Some(cmd);
+        }
+        None
     }
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
@@ -305,18 +260,7 @@ impl Module6KeysHandler {
                     buf[5] = le[3];
                     Some(cap)
                 }
-                ModuleGetCommand::GetUnitInformation => {
-                    let tail = crate::device::Device::Module6Keys.unit_information_tail();
-                    let cap = feature_report_clamp(total_len, buf.len());
-                    if cap < 5 + tail.len() {
-                        return None;
-                    }
-                    feature_report_zero_prefix(buf, cap);
-                    buf[0] = 0x08;
-                    buf[1..5].copy_from_slice(&[0u8; 4]);
-                    buf[5..5 + tail.len()].copy_from_slice(&tail);
-                    Some(cap)
-                }
+                _ => None,
             }
         } else {
             None

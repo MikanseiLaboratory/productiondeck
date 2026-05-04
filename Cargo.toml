@@ -28,15 +28,12 @@ critical-section = "1.0"
 embedded-hal = "1.0"
 embedded-hal-async = "1.0"
 embedded-hal-bus = { version = "0.3", features = ["async"] }
-embedded-hal-bus-sync = { package = "embedded-hal-bus", version = "0.1", optional = true }
 portable-atomic = { version = "1.0", features = ["critical-section"] }
 
 # Display and graphics
 st7735-lcd = "0.10"
 embedded-graphics = "0.8"
 embedded-graphics-core = "0.4"
-display-interface-spi = { version = "0.5", optional = true }
-mipidsi = { version = "0.8", default-features = false, optional = true, features = ["batch"] }
 
 # USB HID
 usbd-hid = "0.10"
@@ -132,5 +129,3 @@ bench = false
 
 [features]
 default = []
-# TC-00 ST7789 + larger Module 6 BMP buffers (use only with `--bin module6 --features display`)
-display = ["dep:mipidsi", "dep:display-interface-spi", "dep:embedded-hal-bus-sync"]

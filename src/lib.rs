@@ -21,15 +21,6 @@
 use embassy_rp::usb::InterruptHandler;
 use embassy_rp::{bind_interrupts, peripherals};
 
-#[cfg(feature = "display")]
-bind_interrupts!(pub struct DisplayDmaIrqs {
-    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<peripherals::DMA_CH0>,
-        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH1>,
-        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH2>,
-        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH3>,
-        embassy_rp::dma::InterruptHandler<peripherals::DMA_CH4>;
-});
-
 // Export all modules for use by device-specific binaries
 pub mod buttons;
 pub mod channels;
@@ -42,11 +33,6 @@ pub mod protocol;
 pub mod supervisor;
 pub mod types;
 pub mod usb;
-
-#[cfg(feature = "display")]
-pub mod display_module6_st7789;
-#[cfg(feature = "display")]
-pub mod display_spi_dma;
 
 // USB interrupt binding - shared by all binaries
 bind_interrupts!(pub struct Irqs {
