@@ -209,11 +209,35 @@ fn create_all_pins_for_device(
     Vec<Output<'static>, 4>,
     Vec<Input<'static>, 32>,
 ) {
+    let Peripherals {
+        FLASH,
+        USB,
+        PIN_2,
+        PIN_3,
+        PIN_4,
+        PIN_5,
+        PIN_6,
+        PIN_7,
+        PIN_9,
+        PIN_10,
+        PIN_11,
+        PIN_12,
+        PIN_13,
+        PIN_16,
+        PIN_20,
+        PIN_21,
+        PIN_22,
+        PIN_25,
+        ..
+    } = p;
+
+    crate::config::init_usb_serial_from_flash(FLASH);
+
     // Create USB driver and LEDs first
-    let driver = Driver::new(p.USB, crate::Irqs);
-    let usb_led = Output::new(p.PIN_20, Level::Low);
-    let status_led = Output::new(p.PIN_25, Level::Low);
-    let error_led = Output::new(p.PIN_21, Level::Low);
+    let driver = Driver::new(USB, crate::Irqs);
+    let usb_led = Output::new(PIN_20, Level::Low);
+    let status_led = Output::new(PIN_25, Level::Low);
+    let error_led = Output::new(PIN_21, Level::Low);
 
     // Create button pins
     let layout = device.button_layout();
@@ -229,72 +253,72 @@ fn create_all_pins_for_device(
         Device::Mini | Device::RevisedMini | Device::MiniDiscord
     ) {
         // Build six dedicated direct-input pins for Mini to avoid partial-move issues
-        let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-        let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-        let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-        let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
-        let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
-        let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
     } else {
         match (layout.rows, layout.cols) {
             (2, 3) => {
                 // Mini and Revised Mini (2x3 = 6 keys)
-                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+                let _ = row_pins.push(Output::new(PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
             }
             (2, 4) => {
                 // Stream Deck + / Neo (4x2 keys)
-                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+                let _ = row_pins.push(Output::new(PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
             }
             (3, 5) => {
                 // 15 Keys Module (5x3)
-                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
-                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+                let _ = row_pins.push(Output::new(PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(PIN_7, Level::High));
+                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
             }
             (4, 8) => {
                 // 32 Keys Module (8x4)
-                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_9, Level::High));
-                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_13, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
+                let _ = row_pins.push(Output::new(PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(PIN_7, Level::High));
+                let _ = row_pins.push(Output::new(PIN_9, Level::High));
+                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
             }
             (4, 9) => {
                 // Stream Deck + XL (9x4)
-                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
-                let _ = row_pins.push(Output::new(p.PIN_9, Level::High));
-                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_13, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
-                let _ = col_pins.push(Input::new(p.PIN_22, Pull::Up));
+                let _ = row_pins.push(Output::new(PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(PIN_7, Level::High));
+                let _ = row_pins.push(Output::new(PIN_9, Level::High));
+                let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_11, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_12, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_13, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_16, Pull::Up));
+                let _ = col_pins.push(Input::new(PIN_22, Pull::Up));
             }
             _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
         }

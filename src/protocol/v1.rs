@@ -279,7 +279,7 @@ impl ProtocolHandlerTrait for V1Handler {
                 buf,
                 report_id,
                 32,
-                crate::config::USB_SERIAL.as_bytes(),
+                crate::config::usb_serial_bytes(),
             ),
             0x04 => fill_feature_rid_ascii(buf, report_id, 17, 5, FW_VER),
             0x05 => fill_feature_v1_fw_string_report(buf, report_id, 32, FW_VER),

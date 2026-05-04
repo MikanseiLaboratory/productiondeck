@@ -83,7 +83,7 @@ fn create_usb_config_for_device(device: Device) -> Config<'static> {
     let mut usb_config = Config::new(usb_config_data.vid, usb_config_data.pid);
     usb_config.manufacturer = Some(usb_config_data.manufacturer);
     usb_config.product = Some(usb_config_data.product_name);
-    usb_config.serial_number = Some(config::USB_SERIAL);
+    usb_config.serial_number = Some(config::usb_serial_str());
     usb_config.max_power = 100; // 200mA (matches real StreamDeck devices)
     usb_config.max_packet_size_0 = 64;
     usb_config.device_class = 0x00; // Interface-defined (HID class will be set in interface)

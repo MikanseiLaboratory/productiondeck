@@ -2,7 +2,13 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig, RUNTIME_DEVICE_TAG_UNINIT};
-use core::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use core::ptr;
+use core::sync::atomic::{AtomicI32, AtomicPtr, AtomicU8, Ordering};
+use defmt::warn;
+use embassy_rp::flash::{Blocking, Flash};
+use embassy_rp::peripherals::FLASH;
+use embassy_rp::Peri;
+use static_cell::StaticCell;
 
 // ===================================================================
 // Device Selection Configuration
@@ -54,8 +60,79 @@ pub fn button_input_mode() -> ButtonInputMode {
 // USB Configuration - Dynamic based on current device
 // ===================================================================
 
-/// Serial number (static for all devices)
-pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
+/// SPI flash size (matches `memory.x` 2048 KiB device).
+const FLASH_SIZE: usize = 2 * 1024 * 1024;
+
+const USB_SERIAL_FALLBACK: &[u8] = b"PRODUCTIONDK";
+
+struct UsbSerialStorage {
+    bytes: [u8; 17],
+    len: u8,
+}
+
+static USB_SERIAL_STORAGE: StaticCell<UsbSerialStorage> = StaticCell::new();
+static USB_SERIAL_PTR: AtomicPtr<UsbSerialStorage> = AtomicPtr::new(ptr::null_mut());
+
+fn hex_encode_lower_8(src: &[u8; 8], dst: &mut [u8]) {
+    debug_assert!(dst.len() >= 16);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for (i, &b) in src.iter().enumerate() {
+        dst[i * 2] = HEX[(b >> 4) as usize];
+        dst[i * 2 + 1] = HEX[(b & 0xf) as usize];
+    }
+}
+
+/// Read SPI flash unique ID once and build the USB / HID / module serial ASCII string.
+/// Call from [`crate::entry`] immediately after [`embassy_rp::init`], before other tasks consume [`FLASH`].
+pub fn init_usb_serial_from_flash(flash: Peri<'static, FLASH>) {
+    let mut flash = Flash::<FLASH, Blocking, FLASH_SIZE>::new_blocking(flash);
+    let mut uid = [0u8; 8];
+    let use_uid = match flash.blocking_unique_id(&mut uid) {
+        Ok(()) => {
+            let bad = uid.iter().all(|&b| b == 0xFF) || uid.iter().all(|&b| b == 0);
+            !bad
+        }
+        Err(e) => {
+            warn!("USB serial: flash unique_id failed: {:?}", e);
+            false
+        }
+    };
+
+    let mut bytes = [0u8; 17];
+    let len = if use_uid {
+        hex_encode_lower_8(&uid, &mut bytes[..16]);
+        16u8
+    } else {
+        warn!("USB serial: using PRODUCTIONDK fallback");
+        let n = USB_SERIAL_FALLBACK.len().min(bytes.len());
+        bytes[..n].copy_from_slice(&USB_SERIAL_FALLBACK[..n]);
+        n as u8
+    };
+
+    let slot = USB_SERIAL_STORAGE.init(UsbSerialStorage { bytes, len });
+    USB_SERIAL_PTR.store(slot, Ordering::Release);
+}
+
+/// Raw ASCII serial bytes (hex from flash UID, or [`USB_SERIAL_FALLBACK`]).
+///
+/// # Panics
+/// If [`init_usb_serial_from_flash`] has not run yet.
+pub fn usb_serial_bytes() -> &'static [u8] {
+    let p = USB_SERIAL_PTR.load(Ordering::Acquire);
+    assert!(!p.is_null(), "init_usb_serial_from_flash must run first");
+    unsafe {
+        let s = &*p;
+        core::slice::from_raw_parts(s.bytes.as_ptr(), s.len as usize)
+    }
+}
+
+/// USB string / logging: same buffer as [`usb_serial_bytes`].
+///
+/// # Panics
+/// If [`init_usb_serial_from_flash`] has not run yet.
+pub fn usb_serial_str() -> &'static str {
+    core::str::from_utf8(usb_serial_bytes()).expect("serial is ASCII")
+}
 
 /// USB version settings
 pub const USB_BCD_DEVICE: u16 = 0x0200; // Device version 2.0
