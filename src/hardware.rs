@@ -53,6 +53,30 @@ impl HardwareConfig {
     ///
     /// This is the canonical row/column assignment for each layout; do not duplicate in `config`.
     pub fn for_device(device: Device) -> Self {
+        if device == Device::Neo {
+            // Eight direct GPIOs (button index 0 → GP1 … button 7 → GP26).
+            return Self {
+                device,
+                button_pins: ButtonPins {
+                    row_pins: &[],
+                    col_pins: &[1, 2, 3, 4, 9, 10, 15, 26][..],
+                },
+                display_pins: DisplayPins {
+                    spi_mosi: 19,
+                    spi_sck: 18,
+                    cs: 8,
+                    dc: 14,
+                    rst: 15,
+                    backlight: 17,
+                },
+                led_pins: LedPins {
+                    status: 25,
+                    usb: 20,
+                    error: 21,
+                },
+            };
+        }
+
         let layout = device.button_layout();
 
         // Get pin assignments based on device layout
@@ -64,7 +88,7 @@ impl HardwareConfig {
                 &[2u8, 3, 7, 9][..],
                 &[4u8, 5, 6, 10, 11, 12, 13, 16, 22][..],
             ), // + XL
-            (2, 4) => (&[2u8, 3][..], &[4u8, 5, 6, 10][..]), // Plus / Neo
+            (2, 4) => (&[2u8, 3][..], &[4u8, 5, 6, 10][..]), // Plus (Neo: direct pins, see above)
             _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
         };
 
@@ -193,6 +217,7 @@ fn create_all_pins_for_device(
     let Peripherals {
         FLASH,
         USB,
+        PIN_1,
         PIN_2,
         PIN_3,
         PIN_4,
@@ -204,11 +229,13 @@ fn create_all_pins_for_device(
         PIN_11,
         PIN_12,
         PIN_13,
+        PIN_15,
         PIN_16,
         PIN_20,
         PIN_21,
         PIN_22,
         PIN_25,
+        PIN_26,
         ..
     } = p;
 
@@ -225,6 +252,18 @@ fn create_all_pins_for_device(
     let mut row_pins: Vec<Output<'static>, 4> = Vec::new();
     let mut col_pins: Vec<Input<'static>, 32> = Vec::new();
 
+    // Neo: eight independent keys on GP1,2,3,4,9,10,15,26 (see [`HardwareConfig::for_device`]).
+    // Push order matches [`spawn_button_task_with_pins`] direct-mode pop/reassembly (button 0 = GP1).
+    if device == Device::Neo {
+        let _ = col_pins.push(Input::new(PIN_26, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_15, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_10, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_9, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_3, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_2, Pull::Up));
+        let _ = col_pins.push(Input::new(PIN_1, Pull::Up));
+    } else {
     // Matrix pin assignments by layout (`module6` uses multicore wiring in `entry`, not here).
     match (layout.rows, layout.cols) {
         (2, 3) => {
@@ -236,7 +275,7 @@ fn create_all_pins_for_device(
             let _ = col_pins.push(Input::new(PIN_6, Pull::Up));
         }
         (2, 4) => {
-            // Stream Deck + / Neo (4x2 keys)
+            // Stream Deck + (4×2 matrix; Neo uses direct GPIOs above)
             let _ = row_pins.push(Output::new(PIN_2, Level::High));
             let _ = row_pins.push(Output::new(PIN_3, Level::High));
             let _ = col_pins.push(Input::new(PIN_4, Pull::Up));
@@ -288,6 +327,7 @@ fn create_all_pins_for_device(
         }
         _ => core::panic!("no pin mapping for matrix {}×{}", layout.cols, layout.rows),
     }
+    }
 
     (driver, usb_led, status_led, error_led, row_pins, col_pins)
 }
@@ -299,6 +339,16 @@ fn spawn_button_task_with_pins(
     mut col_pins: Vec<Input<'static>, 32>,
     device: Device,
 ) -> Result<(), SpawnError> {
+    if device == Device::Neo {
+        let mut inputs: heapless::Vec<Input<'static>, 32> = heapless::Vec::new();
+        while let Some(pin) = col_pins.pop() {
+            let _ = inputs.push(pin);
+        }
+        core::debug_assert_eq!(inputs.len(), 8);
+        spawner.spawn(button_task_direct(inputs)?);
+        return Ok(());
+    }
+
     match crate::config::button_input_mode() {
         crate::config::ButtonInputMode::Matrix => {
             // Extract pins for matrix task based on device layout
