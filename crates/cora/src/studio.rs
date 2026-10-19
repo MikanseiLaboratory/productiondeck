@@ -11,6 +11,7 @@ use crate::legacy::LegacyClient;
 use crate::FeatureStyle;
 
 /// Detected framing.
+#[allow(clippy::large_enum_variant)]
 pub enum Transport {
     Legacy(LegacyClient),
     Cora(CoraClient),
