@@ -19,7 +19,8 @@ embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"]
 embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread", "executor-interrupt"] }
 embassy-futures = "0.1"
 embassy-sync = "0.8"
-embassy-net = { version = "0.9", optional = true, features = ["tcp", "udp", "dhcpv4", "dns"] }
+embassy-net = { version = "0.9", optional = true, features = ["tcp", "udp", "dhcpv4", "dns", "mdns"] }
+embassy-net-wiznet = { version = "0.3", optional = true, features = ["defmt"] }
 embedded-io-async = "0.7"
 
 cortex-m = "0.7"
@@ -136,6 +137,7 @@ default = []
 # Cora TCP server core (requires a network stack)
 cora-net = ["dep:embassy-net"]
 # Board backends (select one in the binary)
-cora-w5500 = ["cora-net"]
+cora-w5500 = ["cora-net", "dep:embassy-net-wiznet"]
 cora-cyw43 = ["cora-net"]
+
 

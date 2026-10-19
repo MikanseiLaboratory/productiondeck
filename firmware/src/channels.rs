@@ -6,6 +6,7 @@
 use crate::types::{ButtonState, DisplayCommand, UsbCommand};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
+use productiondeck_core::input::InputEvent;
 
 /// Channel for button state communication from button task to USB task
 /// Buffer size: 1 (latest state only)
@@ -18,3 +19,6 @@ pub static USB_COMMAND_CHANNEL: Channel<ThreadModeRawMutex, UsbCommand, 4> = Cha
 /// Channel for display commands to the display task
 /// Buffer size: 8 (allows buffering of multiple display operations)
 pub static DISPLAY_CHANNEL: Channel<ThreadModeRawMutex, DisplayCommand, 8> = Channel::new();
+
+/// Input events for the Cora/legacy network transport.
+pub static SD_INPUT_CHANNEL: Channel<ThreadModeRawMutex, InputEvent, 8> = Channel::new();

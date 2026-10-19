@@ -38,4 +38,5 @@ pub mod usb;
 // USB interrupt binding - shared by all binaries
 bind_interrupts!(pub struct Irqs {
     USBCTRL_IRQ => InterruptHandler<peripherals::USB>;
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<peripherals::DMA_CH0>, embassy_rp::dma::InterruptHandler<peripherals::DMA_CH1>;
 });

@@ -48,3 +48,25 @@ board profile.
 - Spawn `runner.run()` and a `net_task` polling `stack.wait_config_up()`, then
   call `network::tcp::serve::<4096, 16384>(stack, &model::STUDIO, identity, input)`.
 - CYW43 uses the same `Stack` type, so `tcp::serve` and `run_cora` are shared.
+
+## Implemented: W5500-EVB-Pico (`cora-w5500`)
+
+`firmware/src/network/w5500.rs` initializes the W5500-EVB-Pico wiring:
+
+```text
+MISO GP16  CSn  GP17
+SCK  GP18  MOSI GP19
+RSTn GP20  INTn GP21
+```
+
+It builds the `embassy-net` stack with DHCP, spawns the WIZnet runner and net
+task, waits for the link and calls `network::tcp::serve`. The `studio-cora`
+binary uses it:
+
+```bash
+cargo build -p productiondeck-firmware --target thumbv6m-none-eabi \
+  --features cora-w5500 --bin studio-cora
+```
+
+MAC is currently a fixed locally-administered address; derive it from the flash
+unique ID when the board profile is finalized.

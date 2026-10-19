@@ -15,8 +15,8 @@ Last updated: 2026-10-19
 | Wireshark dissectors | done | `tools/wireshark/cora.lua` on reference pcap |
 | Studio USB firmware | done | `firmware/src/bin/studio.rs`, real hardware |
 | Cora transport glue (`run_cora`, TCP 5343) | done | `firmware/src/network/*` |
-| W5500 / CYW43 driver init + DHCP | pending | entries exist; `docs/network.md` has API notes |
-| Firmware mDNS responder | pending | — |
+| W5500 driver init + DHCP | done | `network/w5500.rs` for W5500-EVB-Pico (SPI0 GP16-21), `studio-cora` bin |
+| CYW43 driver init | pending | entry point exists |`n| Firmware mDNS responder | pending | — |
 | Network Dock hardware E2E | pending | waiting for dock |
 | integrationdeck adapter | pending | `docs/integrationdeck.md` |
 
@@ -33,3 +33,4 @@ cargo run -p productiondeck-cora --bin cora-probe -- <ip> --legacy
 
 - productiondeck: https://github.com/MikanseiLaboratory/productiondeck/pull/61
 - rust-streamdeck: https://github.com/ryankurte/rust-streamdeck/pull/43
+
