@@ -108,6 +108,20 @@ impl CoraClient {
             .await
     }
 
+    /// Wait for the device's initial keep-alive and acknowledge it.
+    pub async fn handshake(&mut self) -> Result<()> {
+        loop {
+            let frame = self
+                .recv_frame(Duration::from_secs(3))
+                .await?
+                .ok_or_else(|| anyhow!("timed out waiting for Cora keep-alive"))?;
+            if frame.is_keep_alive() {
+                self.ack_keep_alive(&frame).await?;
+                return Ok(());
+            }
+        }
+    }
+
     /// Send a full HID feature report (`hid_send_feature_report`).
     pub async fn send_feature_report(&mut self, report: &[u8]) -> Result<()> {
         self.send_frame(CoraFlags::VERBATIM, HidOp::SendReport, 0, report)

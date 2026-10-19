@@ -59,6 +59,8 @@ async fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("host is required unless --discover is used"))?;
     let mut client = CoraClient::connect((host.as_str(), cli.port)).await?;
     println!("connected to {host}:{}", cli.port);
+    client.handshake().await?;
+    println!("keep-alive acknowledged");
 
     let primaries = [0x80u8, 0x08, 0x83, 0x84, 0x85, 0x86, 0x8a, 0x8f, 0x1a, 0x1c];
     for id in primaries {
@@ -184,3 +186,4 @@ fn decode(report_id: u8, payload: &[u8]) {
         _ => {}
     }
 }
+

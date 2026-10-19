@@ -31,3 +31,7 @@ path = "src/bin/cora-probe.rs"
 [[bin]]
 name = "cora-dock-emulator"
 path = "src/bin/cora-dock-emulator.rs"
+
+[[bin]]
+name = "cora-legacy-emulator"
+path = "src/bin/cora-legacy-emulator.rs"
