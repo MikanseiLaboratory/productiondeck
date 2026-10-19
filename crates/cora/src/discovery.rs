@@ -80,6 +80,7 @@ impl DiscoveryConfig {
 pub struct Advertisement {
     daemon: ServiceDaemon,
     fullname: String,
+    info: ServiceInfo,
 }
 
 impl Advertisement {
@@ -105,8 +106,19 @@ impl Advertisement {
         )
         .context("build mDNS service info")?;
         let fullname = info.get_fullname().to_string();
-        daemon.register(info).context("register mDNS service")?;
-        Ok(Self { daemon, fullname })
+        daemon
+            .register(info.clone())
+            .context("register mDNS service")?;
+        Ok(Self {
+            daemon,
+            fullname,
+            info,
+        })
+    }
+
+    /// Re-register the same service to refresh its mDNS TTL.
+    pub fn announce(&self) {
+        let _ = self.daemon.register(self.info.clone());
     }
 
     pub fn fullname(&self) -> &str {

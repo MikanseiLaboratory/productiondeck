@@ -72,7 +72,7 @@ pub async fn run(config: EmulatorConfig) -> Result<()> {
     .await
     .with_context(|| format!("start Cora server on {}:{}", config.bind, config.port))?;
 
-    let _advertisement = if config.no_mdns {
+    let advertisement = if config.no_mdns {
         None
     } else {
         let discovery = DiscoveryConfig {
@@ -120,10 +120,17 @@ pub async fn run(config: EmulatorConfig) -> Result<()> {
 
     let mut render = config.render_out.as_ref().map(|_| VirtualStudio::new());
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
+    let mut announce = tokio::time::interval(std::time::Duration::from_secs(30));
+    announce.tick().await;
     loop {
         tokio::select! {
             Some(command) = command_rx.recv() => {
                 handle_command(&command, &config, &server, &mut render);
+            }
+            _ = announce.tick() => {
+                if let Some(advertisement) = &advertisement {
+                    advertisement.announce();
+                }
             }
             line = lines.next_line() => {
                 match line? {
