@@ -494,4 +494,37 @@ mod tests {
         assert_eq!(&buf[10..14], &[0x5c, 0xeb, 0x15, 0x00]);
         assert_eq!(n, 14);
     }
+
+    #[test]
+    fn cora_child_info_uses_layout_type_at_byte_7() {
+        let identity = Identity {
+            model: &model::NETWORK_DOCK,
+            serial: "DOCK",
+            mac: [0; 6],
+            versions: FirmwareVersions::default(),
+            child: Some(ChildInfo {
+                connected: true,
+                vid: 0x0fd9,
+                pid: 0x006c,
+                serial: "XL",
+                port: 20001,
+                model_name: "Stream Deck XL",
+                key_w: 96,
+                key_h: 96,
+                rows: 4,
+                cols: 8,
+                layout_type: 0,
+            }),
+        };
+        let mut buf = [0u8; 128];
+        let n = build_feature(FeatureStyle::CoraPrimary, 0x1c, &identity, &mut buf).unwrap();
+        assert_eq!(n, 128);
+        assert_eq!(buf[0], 0x03);
+        assert_eq!(buf[1], 0x1c);
+        assert_eq!(buf[5], 4);
+        assert_eq!(buf[6], 8);
+        assert_eq!(buf[7], 0, "byte 7 is layout type, not key width");
+        assert_eq!(u16::from_le_bytes([buf[8], buf[9]]), 96);
+        assert_eq!(u16::from_le_bytes([buf[126], buf[127]]), 20001);
+    }
 }
