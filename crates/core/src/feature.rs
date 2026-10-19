@@ -359,7 +359,7 @@ fn build_cora_primary(
             out[4] = if child.connected { 0x02 } else { 0x00 };
             out[5] = child.rows;
             out[6] = child.cols;
-            out[7] = child.key_w as u8;
+            out[7] = child.layout_type;
             put_u16_le(out, 8, child.key_w);
             put_u16_le(out, 10, child.key_h);
             put_u16_le(out, 26, child.vid);
