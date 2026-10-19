@@ -1,0 +1,143 @@
+[package]
+name = "productiondeck-firmware"
+version.workspace = true
+edition.workspace = true
+description = "RP2040-based StreamDeck compatible device using Embassy"
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "productiondeck"
+path = "src/lib.rs"
+
+[dependencies]
+productiondeck-core = { workspace = true }
+
+embassy-rp = { version = "0.10", features = ["defmt", "unstable-pac", "time-driver", "rp2040", "critical-section-impl"] }
+embassy-usb = { version = "0.6", features = ["defmt"] }
+embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread", "executor-interrupt"] }
+embassy-futures = "0.1"
+embassy-sync = "0.8"
+embassy-net = { version = "0.9", optional = true, features = ["tcp", "udp", "dhcpv4", "dns", "mdns"] }
+embassy-net-wiznet = { version = "0.3", optional = true, features = ["defmt"] }
+embedded-io-async = "0.7"
+
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+critical-section = "1.0"
+
+embedded-hal = "1.0"
+embedded-hal-async = "1.0"
+embedded-hal-bus = { version = "0.3", features = ["async"] }
+portable-atomic = { version = "1.0", features = ["critical-section"] }
+
+st7735-lcd = "0.10"
+embedded-graphics = "0.8"
+
+usbd-hid = "0.10"
+
+heapless = { version = "0.9", default-features = false }
+nb = "1.1"
+panic-halt = "1.0"
+defmt = "1.0.1"
+defmt-rtt = "1.1"
+fixed = "1.31"
+static_cell = "2.1"
+
+[dev-dependencies]
+defmt-test = "0.4"
+
+[[bin]]
+name = "mini"
+path = "src/bin/mini.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "revised-mini"
+path = "src/bin/revised_mini.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "original"
+path = "src/bin/original.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "original-v2"
+path = "src/bin/original_v2.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "xl"
+path = "src/bin/xl.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "plus"
+path = "src/bin/plus.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "mk2"
+path = "src/bin/mk2.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "neo"
+path = "src/bin/neo.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "plus-xl"
+path = "src/bin/plus_xl.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "module6"
+path = "src/bin/module6.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "module15"
+path = "src/bin/module15.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "module32"
+path = "src/bin/module32.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "studio"
+path = "src/bin/studio.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "studio-cora"
+path = "src/bin/studio_cora.rs"
+test = false
+bench = false
+
+[features]
+default = []
+# Cora TCP server core (requires a network stack)
+cora-net = ["dep:embassy-net"]
+# Board backends (select one in the binary)
+cora-w5500 = ["cora-net", "dep:embassy-net-wiznet"]
+cora-cyw43 = ["cora-net"]
+
+

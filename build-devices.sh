@@ -1,51 +1,29 @@
 #!/bin/bash
 
-# Build script for ProductionDeck device-specific firmware
-# This script builds firmware for different StreamDeck models
+# Build script for ProductionDeck device-specific firmware.
+#
+# The workspace root is not pinned to the embedded target, so firmware builds
+# pass `--target thumbv6m-none-eabi` explicitly.
 
-echo "=== ProductionDeck Multi-Device Build Script ==="
-echo
+set -euo pipefail
 
-# List of devices to build
-devices=("mini" "revised-mini" "original" "original-v2" "xl" "plus")
+TARGET=thumbv6m-none-eabi
+DEVICES=(
+  mini revised-mini original original-v2 xl plus mk2 neo plus-xl
+  module6 module15 module32 studio studio-cora
+)
 
-echo "Available device targets:"
-for device in "${devices[@]}"; do
-    echo "  - $device"
-done
-echo
+build_one() {
+  local device=$1
+  echo "Building StreamDeck $device..."
+  cargo build --release -p productiondeck-firmware --target "$TARGET" --bin "$device"
+  echo "✓ target/$TARGET/release/$device"
+}
 
-# Check if specific device was requested
-if [ "$1" != "" ]; then
-    device=$1
-    if [[ " ${devices[@]} " =~ " ${device} " ]]; then
-        echo "Building firmware for StreamDeck $device..."
-        cargo build --release --bin $device
-        echo "✓ Build complete: target/thumbv6m-none-eabi/release/$device"
-        echo "To upload to device: cargo run --release --bin $device"
-    else
-        echo "Error: Unknown device '$device'"
-        echo "Available devices: ${devices[*]}"
-        exit 1
-    fi
+if [[ $# -gt 0 ]]; then
+  build_one "$1"
 else
-    echo "Building firmware for all devices..."
-    echo
-
-    for device in "${devices[@]}"; do
-        echo "Building StreamDeck $device..."
-        if cargo build --release --bin $device; then
-            echo "✓ $device build successful"
-        else
-            echo "✗ $device build failed"
-        fi
-        echo
-    done
-
-    echo "All builds completed!"
-    echo
-    echo "Usage examples:"
-    echo "  cargo run --release --bin mini          # Run Mini firmware"
-    echo "  cargo run --release --bin xl            # Run XL firmware"
-    echo "  ./build-devices.sh mini                 # Build only Mini firmware"
+  for device in "${DEVICES[@]}"; do
+    build_one "$device"
+  done
 fi

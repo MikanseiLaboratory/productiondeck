@@ -1,0 +1,17 @@
+[package]
+name = "productiondeck-verify"
+version.workspace = true
+edition.workspace = true
+description = "Hardware / library verification harness for ProductionDeck Studio support"
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1"
+hidapi = "2.6"
+streamdeck = { version = "0.10", default-features = false }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+[[bin]]
+name = "studio-verify"
+path = "src/main.rs"
