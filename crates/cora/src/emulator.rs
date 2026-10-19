@@ -126,9 +126,14 @@ pub async fn run(config: EmulatorConfig) -> Result<()> {
                 handle_command(&command, &config, &server, &mut render);
             }
             line = lines.next_line() => {
-                let Some(line) = line? else { break; };
-                if !handle_line(&line, model, &server).await? {
-                    break;
+                match line? {
+                    Some(line) => {
+                        if !handle_line(&line, model, &server).await? {
+                            break;
+                        }
+                    }
+                    // Keep the daemon alive when stdin is closed (background use).
+                    None => std::future::pending::<()>().await,
                 }
             }
             _ = tokio::signal::ctrl_c() => break,

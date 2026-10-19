@@ -4,6 +4,8 @@ Patch: [`tools/rust-streamdeck-studio.patch`](../tools/rust-streamdeck-studio.pa
 
 Upstream: https://github.com/ryankurte/rust-streamdeck (crate `streamdeck` 0.10.0)
 
+PR: https://github.com/ryankurte/rust-streamdeck/pull/43
+
 ## Changes
 
 - `pids::STUDIO = 0x00AA`
