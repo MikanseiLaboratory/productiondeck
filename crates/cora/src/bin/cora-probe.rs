@@ -8,6 +8,7 @@ use clap::Parser;
 use productiondeck_cora::client::CoraClient;
 use productiondeck_cora::discovery;
 use productiondeck_cora::legacy::LegacyClient;
+use productiondeck_cora::studio::StudioDevice;
 use productiondeck_cora::FeatureStyle;
 
 #[derive(Debug, Parser)]
@@ -27,6 +28,9 @@ struct Cli {
     /// Use the legacy 512/1024 framing (Studio fw 2.01.002)
     #[arg(long)]
     legacy: bool,
+    /// Auto-detect legacy/Cora through StudioDevice
+    #[arg(long)]
+    auto: bool,
     /// Seconds to listen for frames after the probes
     #[arg(long, default_value_t = 0)]
     listen: u64,
@@ -63,6 +67,16 @@ async fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("host is required unless --discover is used"))?;
     if cli.legacy {
         return probe_legacy(&host, cli.port).await;
+    }
+    if cli.auto {
+        let mut device = StudioDevice::connect((host.as_str(), cli.port)).await?;
+        let payload = device.feature(0x80).await?;
+        println!(
+            "auto: legacy={} 0x80={}",
+            device.is_legacy(),
+            hex(&payload[..payload.len().min(32)])
+        );
+        return Ok(());
     }
     let mut client = CoraClient::connect((host.as_str(), cli.port)).await?;
     println!("connected to {host}:{}", cli.port);
