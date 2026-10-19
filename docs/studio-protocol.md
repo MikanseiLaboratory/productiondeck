@@ -136,3 +136,29 @@ Next capture steps:
 Until then, Studio-specific Cora values remain **[open]**:
 mDNS `dt`/`prt`, the 0x80/0x1c layouts, the 0x1a semantics, panel image
 commands, and the legacy (headerless) packet size.
+
+## Captured: real Studio fw 2.01.002 on LAN (legacy)
+
+PoE-only Studio, app closed (2026-10-19):
+
+- mDNS: `dt=212`, `md=Stream Deck Studio 20GBO9901`, `id=80:7B:1E:02:56:C1`,
+  `sn=A9IJA53330GUMR`, `vid=0x0FD9`, `pid=0x00AA`, `fw=2.01.002`, port 5343.
+- XL child: `dt=213`, `pid=0x006C`, `prt=1`, port **20001**.
+- Transport is **headerless legacy**, not Cora: 512-byte keep-alive
+  (`01 0a 02 00 01 00`), 1024-byte ACK/query, 512-byte response.
+- With the app running, the first packet was `01 0b` capabilities instead;
+  accept both on connect.
+- Feature responses:
+  - `0x80`: `03 80 02 10 90 00 70 00 90 05 18 01 d9 0f aa 00` (2x16,
+    144x112, LCD 1424x280, VID/PID).
+  - `0x83`: `03 83 00 00 a2 cc 09 b5` + `2.01.002`.
+  - `0x84`: `03 84 00 0e` + serial.
+  - `0x85`: `03 85 06 00` + MAC.
+  - `0x86` / `0x8A`: `03 86 18 00` / `03 8A 18 00` + two version+checksum
+    records (`1.01.012` / `1.01.006`).
+  - `0x8F`: `03 8F 02 00 01`.
+  - `0x1C`: `01 0b` capabilities for the attached XL.
+- LAN control works: `03 08 <brightness>` changes the backlight.
+- The official app 7.6 does not discover/connect to `dt=212` (no mDNS log, no
+  TCP, empty `cora_seen.json`); it appears to support Network Dock-style LAN
+  devices, not Studio native TCP.
