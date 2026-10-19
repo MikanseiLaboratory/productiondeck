@@ -35,3 +35,16 @@ Features:
 
 CYW43 follows the same flow with `cyw43::Control` / `embassy-net` and a Pico W
 board profile.
+
+## W5500 API notes (embassy 0.10)
+
+- `Spi::new(SPI0, sck, mosi, miso, DMA_CH0, DMA_CH1, Irqs, config)` needs DMA
+  interrupt bindings in `Irqs` (in addition to `USBCTRL_IRQ`).
+- Wrap the bus with `embedded_hal_bus::spi::ExclusiveDevice::new(spi, cs, delay)`
+  to get `embedded_hal_async::spi::SpiDevice`.
+- `static STATE: StaticCell<embassy_net_wiznet::State<2, 2>>`.
+- `let (device, runner) = embassy_net_wiznet::new::<W5500, _, _, _>(mac, &mut state, spi_dev, int, rst).await?;`
+- `let (stack, net_runner) = embassy_net::new(device, Config::dhcpv4(Default::default()), &mut RESOURCES, seed);`
+- Spawn `runner.run()` and a `net_task` polling `stack.wait_config_up()`, then
+  call `network::tcp::serve::<4096, 16384>(stack, &model::STUDIO, identity, input)`.
+- CYW43 uses the same `Stack` type, so `tcp::serve` and `run_cora` are shared.
