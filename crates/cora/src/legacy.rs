@@ -32,6 +32,16 @@ impl LegacyClient {
         Ok(Self { stream })
     }
 
+    /// Send `03 08 <value>` (set brightness).
+    pub async fn set_brightness(&mut self, value: u8) -> Result<()> {
+        let mut query = [0u8; CMD];
+        query[0] = 0x03;
+        query[1] = 0x08;
+        query[2] = value;
+        self.stream.write_all(&query).await?;
+        Ok(())
+    }
+
     /// Send `03 <id>` and read the 512-byte response.
     pub async fn query(&mut self, id: u8) -> Result<Vec<u8>> {
         let mut query = [0u8; CMD];

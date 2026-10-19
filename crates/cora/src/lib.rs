@@ -16,6 +16,7 @@ pub mod frame;
 pub mod legacy;
 pub mod render;
 pub mod server;
+pub mod studio;
 
 pub use productiondeck_core as core;
 
