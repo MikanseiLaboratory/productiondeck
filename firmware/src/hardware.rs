@@ -94,8 +94,39 @@ pub async fn init_hardware_tasks_for_device(
     p: Peripherals,
     device: Device,
 ) -> Result<(), SpawnError> {
+    // Studio uses a dedicated bring-up: 16x2 matrix / encoder / NFC wiring is
+    // board-specific, so start USB + a display drain sink until the board
+    // profile is selected.
+    if device == Device::Studio {
+        return init_studio_tasks(spawner, p).await;
+    }
     let hw_config = HardwareConfig::for_device(device);
     init_hardware_tasks_with_config(spawner, p, &hw_config).await
+}
+
+async fn init_studio_tasks(spawner: &Spawner, p: Peripherals) -> Result<(), SpawnError> {
+    let Peripherals {
+        FLASH,
+        USB,
+        PIN_20,
+        PIN_21,
+        PIN_25,
+        ..
+    } = p;
+    crate::config::init_usb_serial_from_flash(FLASH);
+    let driver = Driver::new(USB, crate::Irqs);
+    spawner.spawn(usb_task_for_device(
+        driver,
+        Output::new(PIN_20, Level::Low),
+        Device::Studio,
+    )?);
+    spawner.spawn(status_task(
+        Output::new(PIN_25, Level::Low),
+        Output::new(PIN_21, Level::Low),
+    )?);
+    spawner.spawn(crate::display::display_drain_task()?);
+    info!("Studio USB bring-up complete (display sink: drain)");
+    Ok(())
 }
 
 /// Initialize and spawn core 0 tasks (USB, buttons) for multicore setup

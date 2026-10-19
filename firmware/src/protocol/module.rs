@@ -9,12 +9,33 @@ pub enum FirmwareType {
 pub enum ModuleSetCommand {
     Reset,
     ShowLogo,
-    UpdateBootLogo { slice: u8 },
-    SetBrightness { value: u8 },
-    SetIdleTime { seconds: i32 },
-    SetKeyColor { key_index: u8, r: u8, g: u8, b: u8 },
-    FillLcdColor { r: u8, g: u8, b: u8 },
-    ShowBackgroundByIndex { index: u8 },
+    UpdateBootLogo {
+        slice: u8,
+    },
+    SetBrightness {
+        value: u8,
+    },
+    SetIdleTime {
+        seconds: i32,
+    },
+    SetKeyColor {
+        key_index: u8,
+        r: u8,
+        g: u8,
+        b: u8,
+    },
+    FillLcdColor {
+        r: u8,
+        g: u8,
+        b: u8,
+    },
+    /// Clear one fullscreen panel (Studio `0x03 0x05 <panel>`).
+    ClearPanel {
+        panel: u8,
+    },
+    ShowBackgroundByIndex {
+        index: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, defmt::Format)]

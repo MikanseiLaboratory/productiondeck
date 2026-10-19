@@ -42,6 +42,18 @@ pub enum OutputReportResult {
         index: u8,
         image: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
+    /// Encoder ring colours (cmd 0x0F), 24 RGB triplets.
+    EncoderRing {
+        enc: u8,
+        rgb: [u8; 72],
+    },
+    /// Encoder centre LED (cmd 0x10).
+    EncoderLed {
+        enc: u8,
+        r: u8,
+        g: u8,
+        b: u8,
+    },
     /// Legacy / in-progress chunk (not assembled)
     FullScreenImageChunk,
     BootLogoImageChunk,
@@ -321,6 +333,7 @@ pub mod image {
     }
 
     /// Convert RGB888 to RGB565 for display
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     pub fn rgb888_to_rgb565(rgb888: &[u8]) -> Vec<u8, 2048> {
         let mut rgb565_data = Vec::new();
 

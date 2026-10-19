@@ -29,6 +29,7 @@ pub mod device;
 pub mod display;
 pub mod entry;
 pub mod hardware;
+pub mod network;
 pub mod protocol;
 pub mod supervisor;
 pub mod types;

@@ -62,6 +62,12 @@ fn dispatch_output_report_result(result: OutputReportResult, sender: &UsbCommand
         OutputReportResult::BackgroundImageComplete { index, image } => {
             let _ = sender.try_send(UsbCommand::BackgroundImage { index, data: image });
         }
+        OutputReportResult::EncoderRing { enc, rgb } => {
+            let _ = sender.try_send(UsbCommand::EncoderRing { enc, rgb });
+        }
+        OutputReportResult::EncoderLed { enc, r, g, b } => {
+            let _ = sender.try_send(UsbCommand::EncoderLed { enc, r, g, b });
+        }
         OutputReportResult::FullScreenImageChunk => {
             debug!("Full screen image chunk received (not assembled)");
         }
@@ -180,6 +186,12 @@ impl RequestHandler for StreamDeckHidHandler {
                             let _ = self
                                 .usb_command_sender
                                 .try_send(UsbCommand::ShowBackgroundByIndex { index });
+                        }
+                        ModuleSetCommand::ClearPanel { panel } => {
+                            info!("Clear Studio panel {}", panel);
+                            let _ = self
+                                .usb_command_sender
+                                .try_send(UsbCommand::ClearPanel(panel));
                         }
                         _ => {}
                     }
@@ -377,6 +389,15 @@ async fn usb_task_impl(
                 UsbCommand::ShowBackgroundByIndex { index } => {
                     debug!("Show background index {}", index);
                 }
+                UsbCommand::EncoderRing { enc, rgb } => {
+                    debug!("Encoder {} ring updated ({} bytes)", enc, rgb.len());
+                }
+                UsbCommand::EncoderLed { enc, r, g, b } => {
+                    debug!("Encoder {} LED rgb=({}, {}, {})", enc, r, g, b);
+                }
+                UsbCommand::ClearPanel(panel) => {
+                    debug!("Clear panel {}", panel);
+                }
                 UsbCommand::TouchActivity(t) => {
                     debug!("Touch activity: {:?}", t);
                 }
@@ -413,14 +434,19 @@ async fn usb_task_impl(
                         .protocol_input_key_count()
                         .min(crate::types::MAX_BUTTON_SLOTS);
 
-                    let mut report = [0u8; 64]; // RP2040 USB hardware limitation
+                    // Studio's HID input report is 512 bytes; smaller Gen2 decks
+                    // use the logical report size. Pad to the declared length.
+                    let mut report = [0u8; 512];
                     let report_len =
                         protocol_handler.format_button_report(&button_mapping, &mut report);
-
+                    let send_len = report_len
+                        .max(device.usb_input_report_len())
+                        .min(report.len());
                     if report_len > 0 {
-                        match writer.write(&report[..report_len]).await {
+                        report[report_len..send_len].fill(0);
+                        match writer.write(&report[..send_len]).await {
                             Ok(()) => {
-                                debug!("Button report sent ({} bytes)", report_len);
+                                debug!("Button report sent ({} bytes)", send_len);
                             }
                             Err(e) => {
                                 warn!("Failed to send button report: {:?}", e);

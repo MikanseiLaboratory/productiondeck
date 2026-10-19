@@ -407,6 +407,35 @@ impl ImageBuffer {
 // Display Task Implementation
 // ===================================================================
 
+/// Drain display commands when no physical panel driver is installed.
+///
+/// Without this task, `USB_COMMAND_CHANNEL` processing would block forever on a
+/// full `DISPLAY_CHANNEL` when a host sends images.
+#[embassy_executor::task]
+pub async fn display_drain_task() {
+    let receiver = DISPLAY_CHANNEL.receiver();
+    loop {
+        match receiver.receive().await {
+            DisplayCommand::DisplayImage { key_id, data } => {
+                info!("display sink: key {} image ({} bytes)", key_id, data.len());
+            }
+            DisplayCommand::DisplayFullScreen { data } => {
+                info!("display sink: fullscreen ({} bytes)", data.len());
+            }
+            DisplayCommand::DisplayWindow { data } => {
+                info!("display sink: window ({} bytes)", data.len());
+            }
+            DisplayCommand::Clear(id) => info!("display sink: clear key {}", id),
+            DisplayCommand::ClearAll => info!("display sink: clear all"),
+            DisplayCommand::SetBrightness(value) => info!("display sink: brightness {}", value),
+            DisplayCommand::FillLcd { r, g, b } => info!("display sink: fill ({},{},{})", r, g, b),
+            DisplayCommand::FillKey { key_index, r, g, b } => {
+                info!("display sink: key {} rgb ({},{},{})", key_index, r, g, b)
+            }
+        }
+    }
+}
+
 #[embassy_executor::task]
 pub async fn display_task(
     spi: embassy_rp::spi::Spi<'static, peripherals::SPI0, embassy_rp::spi::Blocking>,

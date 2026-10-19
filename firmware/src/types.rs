@@ -136,6 +136,20 @@ pub enum UsbCommand {
     ShowBackgroundByIndex {
         index: u8,
     },
+    /// Encoder ring colours (Studio 0x02 0x0F): 24 RGB triplets.
+    EncoderRing {
+        enc: u8,
+        rgb: [u8; 72],
+    },
+    /// Encoder centre LED (Studio 0x02 0x10).
+    EncoderLed {
+        enc: u8,
+        r: u8,
+        g: u8,
+        b: u8,
+    },
+    /// Clear a fullscreen panel (Studio feature 0x03 0x05).
+    ClearPanel(u8),
     /// Touch / encoder events for future wiring (no-op in USB task until implemented)
     TouchActivity(TouchActivity),
     EncoderActivity(EncoderActivity),

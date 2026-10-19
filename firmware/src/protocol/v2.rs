@@ -1,18 +1,17 @@
 //! Stream Deck Main / Expanded protocol (V2) — JPEG image chunks, feature reports per Elgato General Reference.
 
-use super::{
-    feature_report_clamp, feature_report_zero_prefix, fill_feature_v2_fw_version_report,
-    map_buttons_grid, ButtonMapping, OutputReportResult, ProtocolHandlerTrait,
-};
+use super::{map_buttons_grid, ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
 use crate::config::{
     IMAGE_COMMAND_V2, IMAGE_PROCESSING_BUFFER_SIZE, OUTPUT_REPORT_IMAGE, V2_COMMAND_BRIGHTNESS,
     V2_COMMAND_RESET,
 };
 use crate::device::Device;
+use crate::device::DeviceConfig;
 use crate::device::ProtocolVersion;
 use crate::protocol::module::ModuleSetCommand;
 use crate::types::MAX_BUTTON_SLOTS;
 use heapless::Vec;
+use productiondeck_core::feature::{build_feature, FeatureStyle, FirmwareVersions, Identity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum V2ImageKind {
@@ -333,6 +332,28 @@ impl ProtocolHandlerTrait for V2Handler {
                     data: payload,
                 })
             }
+            0x0f => {
+                if payload.len() < 2 + 72 {
+                    return OutputReportResult::Unhandled;
+                }
+                let mut rgb = [0u8; 72];
+                rgb.copy_from_slice(&payload[2..74]);
+                OutputReportResult::EncoderRing {
+                    enc: payload[1],
+                    rgb,
+                }
+            }
+            0x10 => {
+                if payload.len() < 5 {
+                    return OutputReportResult::Unhandled;
+                }
+                OutputReportResult::EncoderLed {
+                    enc: payload[1],
+                    r: payload[2],
+                    g: payload[3],
+                    b: payload[4],
+                }
+            }
             0x09 => OutputReportResult::BootLogoImageChunk,
             _ => OutputReportResult::Unhandled,
         }
@@ -349,21 +370,7 @@ impl ProtocolHandlerTrait for V2Handler {
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
-        const DESC: &[u8] = &[
-            0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01, 0x09, 0x01, 0x05, 0x09, 0x19, 0x01, 0x29, 0x30,
-            0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x30, 0x85, 0x01, 0x81, 0x02, 0x0a,
-            0x00, 0xff, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x96, 0x00, 0x04, 0x85, 0x02,
-            0x91, 0x02, 0x0a, 0x00, 0xff, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x20,
-            0x85, 0x03, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08,
-            0x95, 0x20, 0x85, 0x04, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15, 0x00, 0x26, 0xff, 0x00,
-            0x75, 0x08, 0x95, 0x20, 0x85, 0x05, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15, 0x00, 0x26,
-            0xff, 0x00, 0x75, 0x08, 0x95, 0x20, 0x85, 0x06, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
-            0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x20, 0x85, 0x07, 0xb1, 0x04, 0x0a, 0x00,
-            0xff, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x20, 0x85, 0x08, 0xb1, 0x04,
-            0x0a, 0x00, 0xff, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x20, 0x85, 0x0a,
-            0xb1, 0x04, 0xc0,
-        ];
-        DESC
+        productiondeck_core::hid_descriptor::descriptor_for(self.device.core_model())
     }
 
     fn input_report_size(&self, button_count: usize) -> usize {
@@ -398,6 +405,9 @@ impl ProtocolHandlerTrait for V2Handler {
             let cmd = Self::feature_command(data, 0x03)?;
             match cmd {
                 V2_COMMAND_RESET => Some(ModuleSetCommand::Reset),
+                0x05 if self.device.fullscreen_panels() > 0 && data.len() >= 3 => {
+                    Some(ModuleSetCommand::ClearPanel { panel: data[2] })
+                }
                 0x05 if data.len() >= 5 => Some(ModuleSetCommand::FillLcdColor {
                     r: data[2],
                     g: data[3],
@@ -427,54 +437,30 @@ impl ProtocolHandlerTrait for V2Handler {
     }
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
-        const FW_VER: &[u8] = b"3.00.000";
-        let total_len = 32.min(buf.len());
-        match report_id {
-            0x04 | 0x05 | 0x07 => {
-                fill_feature_v2_fw_version_report(buf, report_id, total_len, FW_VER)
-            }
-            0x06 => {
-                let cap = feature_report_clamp(total_len, buf.len());
-                if cap == 0 {
-                    return None;
+        let identity = Identity {
+            model: self.device.core_model(),
+            serial: crate::config::usb_serial_str(),
+            mac: [0; 6],
+            versions: if self.device == Device::Studio {
+                FirmwareVersions {
+                    ap2: "2.01.002",
+                    ap1: "1.00.000",
+                    ld: "1.00.000",
+                    encoder_ap2: "1.01.012",
+                    encoder_ld: "1.01.006",
                 }
-                feature_report_zero_prefix(buf, cap);
-                buf[0] = 0x06;
-                let serial = crate::config::usb_serial_bytes();
-                let dl = core::cmp::min(serial.len(), 14) as u8;
-                buf[1] = dl;
-                let start = 2usize;
-                let end = (start + dl as usize).min(cap);
-                buf[start..end].copy_from_slice(&serial[..(end - start)]);
-                Some(cap)
-            }
-            0x08 => {
-                let cap = feature_report_clamp(total_len, buf.len());
-                if cap == 0 {
-                    return None;
+            } else {
+                FirmwareVersions {
+                    ap2: "3.00.000",
+                    ap1: "3.00.000",
+                    ld: "3.00.000",
+                    encoder_ap2: "3.00.000",
+                    encoder_ld: "3.00.000",
                 }
-                feature_report_zero_prefix(buf, cap);
-                buf[0] = 0x08;
-                let tail = self.device.unit_information_tail();
-                let copy = core::cmp::min(tail.len(), cap.saturating_sub(1));
-                buf[1..1 + copy].copy_from_slice(&tail[..copy]);
-                Some(cap)
-            }
-            0x0A => {
-                let cap = feature_report_clamp(total_len, buf.len());
-                if cap == 0 {
-                    return None;
-                }
-                feature_report_zero_prefix(buf, cap);
-                buf[0] = 0x0A;
-                buf[1] = 0x04;
-                let seconds = crate::config::get_idle_time_seconds();
-                let le = seconds.to_le_bytes();
-                buf[2..6].copy_from_slice(&le);
-                Some(cap)
-            }
-            _ => None,
-        }
+            },
+            child: None,
+        };
+        build_feature(FeatureStyle::Usb, report_id, &identity, buf).ok()
     }
 }
 

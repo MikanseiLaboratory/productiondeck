@@ -1,0 +1,29 @@
+[package]
+name = "productiondeck-cora"
+version.workspace = true
+edition.workspace = true
+description = "Host-side Cora client/server/emulator for Stream Deck Studio"
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+productiondeck-core = { workspace = true }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "io-std", "sync", "signal"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+mdns-sd = "0.13"
+jpeg-decoder = "0.3"
+
+[features]
+default = []
+
+[[bin]]
+name = "cora-emulator"
+path = "src/bin/cora-emulator.rs"
+
+[[bin]]
+name = "cora-probe"
+path = "src/bin/cora-probe.rs"

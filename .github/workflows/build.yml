@@ -10,12 +10,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  host:
+    name: Host crates (core, cora, verify)
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Install system dependencies
       run: |
@@ -27,15 +26,6 @@ jobs:
       with:
         toolchain: stable
         components: rustfmt, clippy
-
-    - name: Install embedded target
-      run: rustup target add thumbv6m-none-eabi
-
-    - name: Install elf2uf2-rs
-      run: cargo install elf2uf2-rs
-
-    - name: Install flip-link
-      run: cargo install flip-link
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -51,35 +41,77 @@ jobs:
     - name: Check formatting
       run: cargo fmt --all -- --check
 
-    - name: Run clippy
-      run: cargo clippy -- -D warnings
+    - name: Clippy (host)
+      run: cargo clippy -p productiondeck-core -p productiondeck-cora --all-targets -- -D warnings
 
-    - name: Check compilation
-      run: cargo check --verbose
+    - name: Test (host)
+      run: cargo test -p productiondeck-core -p productiondeck-cora
+
+    - name: Build host bins
+      run: cargo build -p productiondeck-cora --bins
+
+    - name: Clippy and build verification harness
+      run: |
+        cargo clippy -p productiondeck-verify -- -D warnings
+        cargo build -p productiondeck-verify
+
+  firmware:
+    name: RP2040 firmware
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Install embedded target
+      run: rustup target add thumbv6m-none-eabi
+
+    - name: Install elf2uf2-rs and flip-link
+      run: |
+        cargo install elf2uf2-rs
+        cargo install flip-link
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-fw-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-fw-
+
+    - name: Clippy (firmware)
+      run: cargo clippy -p productiondeck-firmware --target thumbv6m-none-eabi --bins -- -D warnings
+
+    - name: Check Cora TCP feature
+      run: cargo check -p productiondeck-firmware --target thumbv6m-none-eabi --features cora-net --bins
 
     - name: Build firmware (debug)
-      run: cargo build --verbose --target thumbv6m-none-eabi --bins
+      run: cargo build -p productiondeck-firmware --target thumbv6m-none-eabi --bins
 
     - name: Build firmware (release)
-      run: cargo build --release --verbose --target thumbv6m-none-eabi --bins
+      run: cargo build --release -p productiondeck-firmware --target thumbv6m-none-eabi --bins
 
     - name: Verify embedded binaries exist
       run: |
         set -euo pipefail
-        expected=(mini module6 module15 module32 original original-v2 plus revised-mini xl)
+        expected=(mini module6 module15 module32 original original-v2 plus revised-mini xl mk2 neo plus-xl studio studio-cora)
         missing=0
         for bin in "${expected[@]}"; do
           if [ -f "target/thumbv6m-none-eabi/release/$bin" ]; then
-            echo "✅ Found target/thumbv6m-none-eabi/release/$bin"
+            echo "✅ Found $bin"
           else
-            echo "❌ Missing target/thumbv6m-none-eabi/release/$bin"
+            echo "❌ Missing $bin"
             missing=1
           fi
         done
-        echo "\nListing built files:"
-        ls -la target/thumbv6m-none-eabi/release || true
         if [ "$missing" -ne 0 ]; then
-          echo "One or more expected binaries are missing"
           exit 1
         fi
 
@@ -98,19 +130,20 @@ jobs:
           target/thumbv6m-none-eabi/release/plus
           target/thumbv6m-none-eabi/release/revised-mini
           target/thumbv6m-none-eabi/release/xl
+          target/thumbv6m-none-eabi/release/studio
+          target/thumbv6m-none-eabi/release/studio-cora
         retention-days: 30
 
   security-audit:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
+    - uses: actions/checkout@v4
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-      
+
     - name: Install cargo-audit
       run: cargo install cargo-audit
-      
+
     - name: Run security audit
       run: cargo audit

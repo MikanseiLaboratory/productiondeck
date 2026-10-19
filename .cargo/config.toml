@@ -1,5 +1,12 @@
-[build]
-target = "thumbv6m-none-eabi"
+# Root workspace config.
+#
+# The embedded target is NOT the default here: host crates must build for the
+# host. Firmware builds pass `--target thumbv6m-none-eabi` (see `cargo firmware`).
+
+[alias]
+firmware = "build -p productiondeck-firmware --target thumbv6m-none-eabi"
+firmware-release = "build -p productiondeck-firmware --target thumbv6m-none-eabi --release"
+firmware-bins = "build -p productiondeck-firmware --target thumbv6m-none-eabi --bins"
 
 [target.thumbv6m-none-eabi]
 runner = "probe-rs run --chip RP2040 --protocol swd"

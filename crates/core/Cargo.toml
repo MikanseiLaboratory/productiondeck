@@ -1,0 +1,16 @@
+[package]
+name = "productiondeck-core"
+version.workspace = true
+edition.workspace = true
+description = "Sans-I/O Stream Deck protocol core (models, Gen1/Gen2 HID, Cora framing)"
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+heapless = { version = "0.9", default-features = false }
+bitflags = { version = "2", default-features = false }
+defmt = { version = "1.0.1", optional = true }
+
+[features]
+default = []
+defmt = ["dep:defmt"]

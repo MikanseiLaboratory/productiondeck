@@ -98,6 +98,29 @@ pub trait DeviceConfig {
         self.button_layout().total_keys
     }
 
+    /// Number of rotary encoders with LED rings.
+    fn encoder_count(&self) -> usize {
+        0
+    }
+
+    /// Whether the model has an NFC reader.
+    fn has_nfc(&self) -> bool {
+        false
+    }
+
+    /// Number of fullscreen LCD panels.
+    fn fullscreen_panels(&self) -> u8 {
+        0
+    }
+
+    /// Offset of the first key byte in an input payload after the report id.
+    fn key_data_offset(&self) -> u8 {
+        match self.usb_config().protocol {
+            ProtocolVersion::V1 | ProtocolVersion::Module6Keys => 1,
+            ProtocolVersion::V2 => 3,
+        }
+    }
+
     fn max_image_size(&self) -> usize {
         let display = self.display_config();
         match display.format {
@@ -124,6 +147,11 @@ pub trait DeviceConfig {
 
     fn output_report_size(&self) -> usize {
         1024
+    }
+
+    /// Length of the USB HID input report declared in the descriptor.
+    fn usb_input_report_len(&self) -> usize {
+        self.input_report_size()
     }
 }
 
@@ -158,6 +186,8 @@ pub enum Device {
     Module6Keys = 12,
     Module15Keys = 13,
     Module32Keys = 14,
+    /// Stream Deck Studio (0x00AA), 32 keys, 2 encoders, NFC, 2 panels.
+    Studio = 15,
 }
 
 /// Tag value before [`crate::config::init_runtime_device`] runs.
@@ -185,6 +215,7 @@ impl Device {
             12 => Some(Device::Module6Keys),
             13 => Some(Device::Module15Keys),
             14 => Some(Device::Module32Keys),
+            15 => Some(Device::Studio),
             _ => None,
         }
     }
@@ -206,6 +237,7 @@ impl Device {
             Device::Module6Keys => 0x00B8,
             Device::Module15Keys => 0x00B9,
             Device::Module32Keys => 0x00BA,
+            Device::Studio => 0x00AA,
         }
     }
 
@@ -221,6 +253,7 @@ impl Device {
             Device::Plus => (2u8, 4u8, 120u16, 120u16, 800u16, 480u16),
             Device::PlusXl => (4u8, 9u8, 112u16, 112u16, 1280u16, 800u16),
             Device::Neo => (2u8, 4u8, 96u16, 96u16, 480u16, 320u16),
+            Device::Studio => (2u8, 16u8, 144u16, 112u16, 2304u16, 224u16),
             Device::Mini | Device::RevisedMini | Device::MiniDiscord | Device::Module6Keys => {
                 (2u8, 3u8, 80u16, 80u16, 320u16, 240u16)
             }
@@ -266,6 +299,29 @@ impl Device {
     pub fn supports_window_image_commands(&self) -> bool {
         matches!(self, Device::Neo | Device::Plus | Device::PlusXl)
     }
+
+    /// Map this firmware profile to the shared no_std model definition.
+    pub fn core_model(&self) -> &'static productiondeck_core::ModelInfo {
+        use productiondeck_core::model as core;
+        match self {
+            Device::Mini => &core::MINI,
+            Device::RevisedMini => &core::REVISED_MINI,
+            Device::MiniDiscord => &core::MINI_DISCORD,
+            Device::Original => &core::ORIGINAL,
+            Device::OriginalV2 => &core::ORIGINAL_V2,
+            Device::Mk2 => &core::MK2,
+            Device::Mk2ScissorKeys => &core::MK2_SCISSOR,
+            Device::Xl => &core::XL,
+            Device::Xl2022 => &core::XL_2022,
+            Device::Plus => &core::PLUS,
+            Device::PlusXl => &core::PLUS_XL,
+            Device::Neo => &core::NEO,
+            Device::Module6Keys => &core::MODULE6,
+            Device::Module15Keys => &core::MODULE15,
+            Device::Module32Keys => &core::MODULE32,
+            Device::Studio => &core::STUDIO,
+        }
+    }
 }
 
 impl DeviceConfig for Device {
@@ -286,6 +342,35 @@ impl DeviceConfig for Device {
             Device::Module6Keys => "StreamDeck Module 6 Keys",
             Device::Module15Keys => "StreamDeck Module 15 Keys",
             Device::Module32Keys => "StreamDeck Module 32 Keys",
+            Device::Studio => "Stream Deck Studio",
+        }
+    }
+
+    fn encoder_count(&self) -> usize {
+        match self {
+            Device::Studio => 2,
+            Device::Plus => 4,
+            Device::PlusXl => 2,
+            _ => 0,
+        }
+    }
+
+    fn has_nfc(&self) -> bool {
+        matches!(self, Device::Studio)
+    }
+
+    fn fullscreen_panels(&self) -> u8 {
+        match self {
+            Device::Studio => 2,
+            _ => 0,
+        }
+    }
+
+    fn usb_input_report_len(&self) -> usize {
+        match self {
+            // Captured from a real Studio: HID input report is 512 bytes.
+            Device::Studio => 512,
+            _ => self.input_report_size(),
         }
     }
 
@@ -308,6 +393,7 @@ impl DeviceConfig for Device {
             Device::Xl | Device::Xl2022 | Device::Module32Keys => ButtonLayout::new(8, 4, true),
             Device::Plus | Device::Neo => ButtonLayout::new(4, 2, true),
             Device::PlusXl => ButtonLayout::new(9, 4, true),
+            Device::Studio => ButtonLayout::new(16, 2, true),
         }
     }
 
@@ -372,6 +458,14 @@ impl DeviceConfig for Device {
                 needs_rotation: false,
                 flip_horizontal: true,
                 flip_vertical: true,
+            },
+            Device::Studio => DisplayConfig {
+                image_width: 144,
+                image_height: 112,
+                format: ImageFormat::Jpeg,
+                needs_rotation: false,
+                flip_horizontal: false,
+                flip_vertical: false,
             },
         }
     }
@@ -480,6 +574,13 @@ impl DeviceConfig for Device {
                 vid: 0x0fd9,
                 pid: 0x00BA,
                 product_name: "Stream Deck Module 32 Keys",
+                manufacturer: "Elgato Systems",
+                protocol: ProtocolVersion::V2,
+            },
+            Device::Studio => UsbConfig {
+                vid: 0x0fd9,
+                pid: 0x00AA,
+                product_name: "Stream Deck Studio",
                 manufacturer: "Elgato Systems",
                 protocol: ProtocolVersion::V2,
             },
