@@ -20,6 +20,8 @@ use productiondeck_core::model::ModelInfo;
 use productiondeck_core::protocol::NullSink;
 
 pub mod tcp;
+#[cfg(feature = "cora-w5500")]
+pub mod w5500;
 
 /// How often keep-alive / timeout state is advanced while idle.
 pub const TICK: Duration = Duration::from_millis(100);
