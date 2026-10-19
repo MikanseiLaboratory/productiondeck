@@ -22,7 +22,7 @@ impl LegacyClient {
         stream.set_nodelay(true).ok();
         let mut keepalive = [0u8; KA];
         stream.read_exact(&mut keepalive).await?;
-        if keepalive[0] != 0x01 || keepalive[1] != 0x0a {
+        if keepalive[0] != 0x01 || (keepalive[1] != 0x0a && keepalive[1] != 0x0b) {
             bail!("not a legacy keep-alive: {:02x?}", &keepalive[..8]);
         }
         let mut ack = [0u8; CMD];
