@@ -89,8 +89,11 @@ jobs:
     - name: Clippy (firmware)
       run: cargo clippy -p productiondeck-firmware --target thumbv6m-none-eabi --bins -- -D warnings
 
-    - name: Check Cora TCP feature
-      run: cargo check -p productiondeck-firmware --target thumbv6m-none-eabi --features cora-net --bins
+    - name: Check Cora features
+      run: |
+        cargo check -p productiondeck-firmware --target thumbv6m-none-eabi --features cora-net --bins
+        cargo check -p productiondeck-firmware --target thumbv6m-none-eabi --features cora-w5500 --bins
+        cargo check -p productiondeck-firmware --target thumbv6m-none-eabi --features cora-cyw43 --bins
 
     - name: Build firmware (debug)
       run: cargo build -p productiondeck-firmware --target thumbv6m-none-eabi --bins
