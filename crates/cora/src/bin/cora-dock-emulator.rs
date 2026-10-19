@@ -73,13 +73,7 @@ async fn run() -> Result<()> {
         tx.clone(),
     )
     .await?;
-    let child = CoraServer::bind(
-        ("0.0.0.0", CHILD_PORT),
-        &model::XL,
-        child_identity,
-        tx,
-    )
-    .await?;
+    let child = CoraServer::bind(("0.0.0.0", CHILD_PORT), &model::XL, child_identity, tx).await?;
 
     let _parent_adv = Advertisement::start(&DiscoveryConfig {
         instance: "Stream Deck Network Dock (emu)".to_string(),
