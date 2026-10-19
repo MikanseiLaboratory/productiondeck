@@ -7,6 +7,7 @@ use anyhow::Result;
 use clap::Parser;
 use productiondeck_cora::client::CoraClient;
 use productiondeck_cora::discovery;
+use productiondeck_cora::legacy::LegacyClient;
 use productiondeck_cora::FeatureStyle;
 
 #[derive(Debug, Parser)]
@@ -23,6 +24,9 @@ struct Cli {
     /// Query feature reports with the official-app WRITE style as well
     #[arg(long)]
     write_style: bool,
+    /// Use the legacy 512/1024 framing (Studio fw 2.01.002)
+    #[arg(long)]
+    legacy: bool,
     /// Seconds to listen for frames after the probes
     #[arg(long, default_value_t = 0)]
     listen: u64,
@@ -57,6 +61,9 @@ async fn main() -> Result<()> {
     let host = cli
         .host
         .ok_or_else(|| anyhow::anyhow!("host is required unless --discover is used"))?;
+    if cli.legacy {
+        return probe_legacy(&host, cli.port).await;
+    }
     let mut client = CoraClient::connect((host.as_str(), cli.port)).await?;
     println!("connected to {host}:{}", cli.port);
     client.handshake().await?;
@@ -187,3 +194,73 @@ fn decode(report_id: u8, payload: &[u8]) {
     }
 }
 
+async fn probe_legacy(host: &str, port: u16) -> Result<()> {
+    let mut client = LegacyClient::connect((host, port)).await?;
+    println!("legacy keep-alive acknowledged");
+    for id in [0x80u8, 0x08, 0x83, 0x84, 0x85, 0x86, 0x8a, 0x8f, 0x1c] {
+        match client.query(id).await {
+            Ok(payload) => {
+                println!(
+                    "LEGACY {id:#04x} len={} {}",
+                    payload.len(),
+                    hex(&payload[..payload.len().min(48)])
+                );
+                decode_legacy(id, &payload);
+            }
+            Err(e) => println!("LEGACY {id:#04x}: {e:#}"),
+        }
+    }
+    Ok(())
+}
+
+fn decode_legacy(id: u8, payload: &[u8]) {
+    match id {
+        0x80 if payload.len() >= 16 => {
+            let rows = payload[2];
+            let cols = payload[3];
+            let kw = u16::from_le_bytes([payload[4], payload[5]]);
+            let kh = u16::from_le_bytes([payload[6], payload[7]]);
+            let lw = u16::from_le_bytes([payload[8], payload[9]]);
+            let lh = u16::from_le_bytes([payload[10], payload[11]]);
+            let vid = u16::from_le_bytes([payload[12], payload[13]]);
+            let pid = u16::from_le_bytes([payload[14], payload[15]]);
+            println!(
+                "      -> {rows}x{cols} {kw}x{kh} lcd={lw}x{lh} vid:pid={vid:#06x}:{pid:#06x}"
+            );
+        }
+        0x83 | 0x86 | 0x8a if payload.len() >= 16 => {
+            let off = if id == 0x83 { 8 } else { 4 };
+            let text: Vec<u8> = payload[off..off + 8]
+                .iter()
+                .copied()
+                .take_while(|b| *b != 0)
+                .collect();
+            println!("      -> {}", String::from_utf8_lossy(&text));
+        }
+        0x84 if payload.len() >= 4 => {
+            let len = payload[3] as usize;
+            let end = (4 + len).min(payload.len());
+            println!(
+                "      -> serial={}",
+                String::from_utf8_lossy(&payload[4..end])
+            );
+        }
+        0x85 if payload.len() >= 10 => {
+            let m = &payload[4..10];
+            println!(
+                "      -> MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                m[0], m[1], m[2], m[3], m[4], m[5]
+            );
+        }
+        0x1c if payload.len() >= 128 => {
+            let status = payload[4];
+            let vid = u16::from_le_bytes([payload[26], payload[27]]);
+            let pid = u16::from_le_bytes([payload[28], payload[29]]);
+            let port = u16::from_le_bytes([payload[126], payload[127]]);
+            println!(
+                "      -> child status={status:#04x} vid:pid={vid:#06x}:{pid:#06x} port={port}"
+            );
+        }
+        _ => {}
+    }
+}

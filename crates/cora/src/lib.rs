@@ -13,6 +13,7 @@ pub mod command;
 pub mod discovery;
 pub mod emulator;
 pub mod frame;
+pub mod legacy;
 pub mod render;
 pub mod server;
 

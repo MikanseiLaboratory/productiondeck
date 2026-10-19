@@ -8,7 +8,9 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use productiondeck_cora::core::feature::{build_capabilities, ChildInfo, FirmwareVersions, Identity};
+use productiondeck_cora::core::feature::{
+    build_capabilities, ChildInfo, FirmwareVersions, Identity,
+};
 use productiondeck_cora::core::model;
 use productiondeck_cora::discovery::{Advertisement, DiscoveryConfig};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -210,4 +212,3 @@ fn dual_fw(out: &mut [u8; KA], version: &str) {
     out[16..16 + n].copy_from_slice(&v[..n]);
     out[24..28].copy_from_slice(&sum);
 }
-
