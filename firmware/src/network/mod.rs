@@ -19,6 +19,8 @@ use productiondeck_core::input::InputEvent;
 use productiondeck_core::model::ModelInfo;
 use productiondeck_core::protocol::NullSink;
 
+#[cfg(feature = "cora-cyw43")]
+pub mod cyw43;
 pub mod tcp;
 #[cfg(feature = "cora-w5500")]
 pub mod w5500;
